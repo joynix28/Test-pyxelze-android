@@ -1,63 +1,69 @@
 # StegoVault Architecture & Formats
 
-StegoVault is a modern, legally clean Kotlin-based Android application that wraps a "Roxify-style" steganographic engine. It enables users to compress, encrypt, and embed files and directories into standard PNG images (or internal steganographic archives).
+**Made by JoyniX**
+*Inspired conceptually by Roxify and Pyxelze. Fully FOSS (Apache 2.0).*
 
-## 1. High-Level Architecture
+StegoVault is a modern, mathematically strict, lossless steganography toolkit for Android. It embeds binary archives into valid PNG images dynamically without arbitrarily exploding file sizes.
 
-The application follows Clean Architecture principles:
+---
 
-```text
-[UI Layer (Material 3 + Fragments + ViewModels)]
-       |
-       v
-[Domain / Use-Cases (EncodeUseCase, DecodeUseCase, DiagnosticsUseCase)]
-       |
-       v
-[Data / Background Layer (WorkManager, DocumentFile SAF, SharedPreferences)]
-       |
-       v
-[Engine Layer (StegoEngine Abstraction)]
-       |
-       v
-[CryptoEngine] <--> [ArchiveManager (Zstd/Deflate)] <--> [StegoPng (SVLT / Screenshot mode)]
-```
+## 1. High-Level Pipeline (Strict "Compression-First" Approach)
 
-- **UI Layer:** Implements a modern Material 3 design, adaptive theming, bottom navigation, and a toolbox of sub-features (QR share, Clipboard Locker, Diagnostics).
-- **Domain Layer:** Coordinates the interactions between the UI and the underlying engines asynchronously using Kotlin Coroutines and WorkManager.
-- **Engine Layer:** The `StegoEngine` interface provides a robust, streaming-capable wrapper around compression, encryption, and PNG manipulation. It intelligently chooses strategies based on payload size and device capabilities.
+To ensure PNG output sizes do not explode into 40MB unwieldy objects from 1MB payloads, StegoVault mandates a **Strict Compress-First Pipeline**:
 
-## 2. Core Pipeline (Roxify-Style)
+1. **Input Collection:** Traverse files/directories and build a flat `ArchiveEntry` sequence.
+2. **Compression:** All data is **ALWAYS** compressed first (via Java's standard `Deflater` or advanced external tools like `Zstd`). Compression generally reduces text/documents by 60%+ ensuring the stego-payload remains small.
+3. **Encryption (Optional):** If a passphrase is provided:
+   - Key Derivation: `PBKDF2-HMAC-SHA256` (Default 100,000 iterations + 16 byte salt).
+   - Encryption: `AES-256-GCM` (96-bit nonce, 128-bit MAC tag).
+4. **Embedding (Steganography):** Data is embedded via two strictly controlled methodologies based on mathematically bounded capacity.
 
-### Encoding Pipeline (Binary -> PNG)
-1.  **Input:** Streams from an arbitrary binary or a directory (traversed recursively via SAF).
-2.  **Compression:** Data is compressed to minimize the footprint. (Currently using Deflate/Zstd based on configuration).
-3.  **Encryption (Optional):** If a passphrase is provided, a 256-bit key is derived using PBKDF2-HMAC-SHA256 (iteration count determined by device profile or user setting). The compressed payload is encrypted using AES-256-GCM. If no passphrase is provided, the data is stored in plaintext.
-4.  **PNG Embedding:**
-    *   **Compact Mode (Default for small payloads):** The payload is injected into a 1x1 or small dummy PNG using a custom chunk (`SVLT`).
-    *   **Screenshot Mode (For larger files):** The payload bits are encoded directly into RGB pixel variances (gradient/noise patterns), producing a larger but robust PNG that easily avoids chunk-stripping algorithms.
-    *   **Multi-Part (For massive files):** Large payloads exceeding single-image capacity are split into multiple parts, each wrapped in its own PNG with a manifest pointing to the sequence.
+---
 
-### Decoding Pipeline (PNG -> Binary)
-1.  **Input:** PNG buffer or stream.
-2.  **Detection:** Reads headers to determine if the payload relies on chunk injection (`SVLT`) or pixel-based steganography.
-3.  **Extraction:** Extracts the encrypted/compressed payload.
-4.  **Decryption:** Prompts for a passphrase (if flagged as encrypted) and attempts AES-GCM decryption using the extracted salt, nonce, and iterations.
-5.  **Decompression & Unpacking:** Decompresses the payload and restores the original file/directory structure via the Android Storage Access Framework.
+## 2. PNG Steganography & Capacity Mathematics
 
-## 3. Cryptographic Layer
+StegoVault treats PNGs as lossless, compressed datasets, NOT uncompressed bitmaps.
 
-- **Key Derivation:** PBKDF2 with HMAC-SHA256.
-    - *Salt:* 16 bytes (Randomly generated per archive).
-    - *Iterations:* Adaptive. Default 200,000, dynamically adjustable for low-end devices.
-    - *Output:* 32 bytes (256-bit AES Key).
-- **Encryption Algorithm:** AES-256-GCM.
-    - *Nonce:* 12 bytes (Randomly generated).
-    - *Tag:* 16 bytes (128-bit Authentication Tag).
-- **Security Posture:** Data authenticity and confidentiality are guaranteed. Without the correct password, `AEADBadTagException` terminates decoding safely.
+### A) LSB / Pixel Mode (For Stealth & Small Files)
+Using the Least Significant Bit (LSB) for RGB pixels provides a highly stealthy, noise-like steganographic cover. However, writing too much entropy into a PNG bitmap *destroys the PNG Deflate compression efficiency*, causing file size blowups.
 
-## 4. Archive Binary Format
+**The Rule of Thumb:**
+- `Capacity_Bits ≈ Width * Height * Channels (3 for RGB)` using exactly **1 bit per channel**.
+- A standard 512x512 image has ~262,144 pixels.
+  - `262,144 * 3 bits = 786,432 bits ≈ 98 KB` of strict payload capacity.
+- **Engine Logic:** If the payload is > ~500KB, **LSB mode is disabled** because creating a 2000x2000 image solely to hold 1MB of data will explode the generated PNG size beyond 5x the payload.
 
-StegoVault packs files into a flat binary stream before compression:
+### B) Chunk Mode (For Large Files & Bulk Archives)
+For any payload exceeding typical LSB capacities (i.e. > ~500KB), the engine automatically routes to **Chunk Mode**.
+- The image pixels form a simple, easily compressible gradient or text (e.g. 512x512 gradient with "StegoVault Archive").
+- The payload is injected into a custom, non-critical PNG ancillary chunk called `SVLT`.
+- **Efficiency:** The base PNG pixels compress down to a few kilobytes, and the chunk simply appends the compressed payload size. Total Output Size ≈ `Base Image Size (10KB) + Compressed Payload Size + Chunk Overhead (12 bytes)`.
+- This strictly enforces `Output Size <= Original Size`.
+
+---
+
+## 3. App Toolbox Features
+
+StegoVault wraps this core technology into a robust "toolbox" of 6 features:
+
+1. **Stego Archive (Vault):** Encode/Decode standard files and directories.
+2. **Multi-Part Archive Manager:** Slices multi-gigabyte files into sequence chunks to prevent OOM errors.
+3. **Secure Clipboard Locker:** Instantly encrypt copied text to a steganographic PNG or QR code.
+4. **Camera Stego:** Take a live photo and immediately embed a secret note or file into the image pixels.
+5. **Secure QR Share:** An offline, app-to-app sharing channel. Encrypts a small payload and slices it into multi-frame QR codes.
+6. **Diagnostics:** Benchmarks device compute power to categorize `LOW/MEDIUM/HIGH` tiers, dynamically adjusting PBKDF2 iterations to maintain fast UX on weak Androids.
+
+---
+
+## 4. UI Architecture & OS Integration
+
+- **UI:** Strict Material 3 (MVVM architecture, Kotlin Coroutines, Fragments, Adaptive Theming).
+- **Background Processing:** `WorkManager` delegates heavy streaming IO jobs (packing, encryption) off the main thread, offering persistent notifications and progress bars.
+- **OS Hooks:** Handles `ACTION_SEND` and `ACTION_SEND_MULTIPLE` to catch files directly from the Android Share Menu. Also provides `AppWidgetProvider` for 1-tap encoding.
+
+---
+
+## 5. Archive Binary Specification
 
 ```text
 [Header Block]
@@ -81,17 +87,3 @@ StegoVault packs files into a flat binary stream before compression:
 [Data Block]
 - Raw binary data of all files concatenated sequentially.
 ```
-
-## 5. QR Share Protocol
-
-For small payloads (keys, text, small archives), StegoVault uses QR Codes:
-- **Single Frame:** Standard QR code encoding up to ~2.9KB.
-- **Multi-Frame (Future):** Payload split into chunks `[1/N][Data]`, `[2/N][Data]`. The scanner buffers parts until the set is complete.
-- *Note:* QRs represent a secondary offline channel that perfectly interfaces with the app's cryptographic engine.
-
-## 6. Future Extensions
-
-1.  **Audio Steganography:** Hiding encrypted archives within FLAC or WAV file headers/LSBs.
-2.  **Advanced Compression:** Implement true multi-threaded Rust/C++ Zstd or BWT-ANS natively via JNI for massive performance gains.
-3.  **Cloud Sync:** Encrypted cloud backup integration ensuring zero-knowledge synchronization of vaults.
-4.  **Desktop Companion App:** A Kotlin Multiplatform or Rust/Tauri desktop client capable of reading the exact same `SVLT` PNGs.

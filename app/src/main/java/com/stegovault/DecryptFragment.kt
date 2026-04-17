@@ -67,7 +67,7 @@ class DecryptFragment : Fragment() {
             pickFileLauncher.launch("*/*")
         }
 
-        binding.btnScanQr.setOnClickListener { (activity as? MainActivity)?.navigateTo(QrScannerFragment()) }
+        binding.btnScanQr.setOnClickListener { requireActivity().supportFragmentManager.findFragmentById(R.id.nav_host_fragment)?.let { (it as androidx.navigation.fragment.NavHostFragment).navController.navigate(R.id.nav_qr) } }
 
         binding.btnStartDecrypt.setOnClickListener {
             if (targetFile == null) {

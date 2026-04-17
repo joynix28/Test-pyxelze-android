@@ -1,83 +1,66 @@
 package com.stegovault
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Shader
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.io.OutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.zip.DeflaterOutputStream
-import java.util.zip.InflaterInputStream
+import java.io.InputStream
+import java.io.OutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Concrete implementation of the StegoEngine using native Kotlin constructs and streaming.
+ * Concrete implementation of the strictly bounded StegoEngine.
+ * Enforces compression-first rules and safeguards against memory bounds and file size explosions.
+ * Made by JoyniX.
  */
 class DefaultStegoEngine(private val context: Context) : StegoEngine {
 
-    override suspend fun encode(inStream: InputStream, inputSize: Long, outStream: OutputStream, options: StegoEngine.EncodeOptions): StegoEngine.StegoResult = withContext(Dispatchers.IO) {
+    override suspend fun encode(
+        inStream: InputStream,
+        inputSize: Long,
+        outStream: OutputStream,
+        options: StegoEngine.EncodeOptions
+    ): StegoEngine.StegoResult = withContext(Dispatchers.IO) {
         val warnings = mutableListOf<String>()
         val finalMode = determineMode(inputSize, options.mode)
 
-        val tempCompressedFile = File.createTempFile("stego_compressed", ".tmp", context.cacheDir)
-        val tempEncryptedFile = File.createTempFile("stego_encrypted", ".tmp", context.cacheDir)
+        if (finalMode != options.mode) {
+            warnings.add("Requested mode ignored to prevent invalid or excessively large PNG. Used: $finalMode")
+        }
+
+        val tempCompressedFile = File.createTempFile("stego_compress", ".tmp", context.cacheDir)
+        val tempEncryptedFile = File.createTempFile("stego_encrypt", ".tmp", context.cacheDir)
         val tempPayloadFile = File.createTempFile("stego_payload", ".tmp", context.cacheDir)
 
         try {
-            // 1. Compress Stream
+            // 1. Strict Compression First
+            options.onProgress?.invoke("Compressing Archive", 10)
             FileOutputStream(tempCompressedFile).use { fos ->
-                if (options.compression == StegoEngine.CompressionAlgo.DEFLATE) {
-                    val deflater = java.util.zip.Deflater(options.compressionLevel)
-                    val dos = DeflaterOutputStream(fos, deflater)
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (inStream.read(buffer).also { bytesRead = it } != -1) {
-                        dos.write(buffer, 0, bytesRead)
-                    }
-                    dos.close()
-                } else {
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (inStream.read(buffer).also { bytesRead = it } != -1) {
-                        fos.write(buffer, 0, bytesRead)
-                    }
-                }
+                Compressor.compressStream(inStream, fos, options.compression, options.compressionLevel)
             }
 
-            // 2. Encrypt Stream
+            // 2. Encryption
+            val isEncrypted = !options.passphrase.isNullOrEmpty()
             val salt = CryptoEngine.generateSalt()
             val nonce = CryptoEngine.generateNonce()
-            val isEncrypted = !options.passphrase.isNullOrEmpty()
             val iterations = if (isEncrypted) getAdaptiveIterations(options.targetDeviceClass) else 0
 
+            options.onProgress?.invoke("Encrypting Stream", 30)
             FileOutputStream(tempEncryptedFile).use { fos ->
                 if (isEncrypted) {
                     FileInputStream(tempCompressedFile).use { fis ->
                         CryptoEngine.encryptStream(fis, fos, options.passphrase!!, salt, nonce, iterations)
                     }
                 } else {
-                    FileInputStream(tempCompressedFile).use { fis ->
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (fis.read(buffer).also { bytesRead = it } != -1) {
-                            fos.write(buffer, 0, bytesRead)
-                        }
-                    }
+                    Compressor.compressStream(FileInputStream(tempCompressedFile), fos, Compressor.Algorithm.NONE, 0)
                 }
             }
 
-            // 3. Assemble Header
+            // 3. Header Synthesis
             val header = StegoPng.Header(
                 isEncrypted = isEncrypted,
-                compression = if (options.compression == StegoEngine.CompressionAlgo.DEFLATE) 2 else 0,
+                compression = options.compression,
                 salt = salt,
                 nonce = nonce,
                 iterations = iterations,
@@ -85,34 +68,29 @@ class DefaultStegoEngine(private val context: Context) : StegoEngine {
                 payloadSize = tempEncryptedFile.length()
             )
 
-            // 4. Create Payload Stream (Header + Encrypted Data)
+            // 4. Assemble Payload
+            options.onProgress?.invoke("Packing Final Chunk", 60)
             FileOutputStream(tempPayloadFile).use { fos ->
                 header.writeTo(fos)
                 FileInputStream(tempEncryptedFile).use { fis ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (fis.read(buffer).also { bytesRead = it } != -1) {
-                        fos.write(buffer, 0, bytesRead)
-                    }
+                    Compressor.compressStream(fis, fos, Compressor.Algorithm.NONE, 0)
                 }
             }
 
-            // 5. Generate Base PNG and Embed Stream
-            if (finalMode == StegoEngine.EncodeMode.SCREENSHOT) {
+            // 5. Final PNG Embed
+            options.onProgress?.invoke("Generating Stego Image", 80)
+            if (finalMode == StegoEngine.EncodeMode.PIXEL) {
                 FileInputStream(tempPayloadFile).use { fis ->
-                    StegoPng.encodePixels(fis, outStream, tempPayloadFile.length(), 512, 512)
+                    StegoPng.encodePixels(fis, outStream, tempPayloadFile.length())
                 }
             } else {
-                val basePng = generateCoverImage(finalMode)
+                val coverBytes = StegoPng.generateCoverImage(context)
                 FileInputStream(tempPayloadFile).use { fis ->
-                    StegoPng.embedIntoPngStream(java.io.ByteArrayInputStream(basePng), fis, tempPayloadFile.length(), outStream)
+                    StegoPng.embedIntoPngStream(java.io.ByteArrayInputStream(coverBytes), fis, tempPayloadFile.length(), outStream)
                 }
             }
 
-            if (inputSize > 50 * 1024 * 1024) { // 50MB warning threshold
-                warnings.add("Large payload detected. Used chunked streaming.")
-            }
-
+            options.onProgress?.invoke("Done", 100)
             StegoEngine.StegoResult(finalMode, warnings, header)
         } finally {
             tempCompressedFile.delete()
@@ -121,33 +99,33 @@ class DefaultStegoEngine(private val context: Context) : StegoEngine {
         }
     }
 
-    override suspend fun decode(inStream: InputStream, outStream: OutputStream, options: StegoEngine.DecodeOptions): StegoEngine.DecodeResult = withContext(Dispatchers.IO) {
+    override suspend fun decode(
+        inStream: InputStream,
+        outStream: OutputStream,
+        options: StegoEngine.DecodeOptions
+    ): StegoEngine.DecodeResult = withContext(Dispatchers.IO) {
         val warnings = mutableListOf<String>()
-        options.onProgress?.invoke("Extracting PNG Payload", 0, 0)
 
+        val tempInputFile = File.createTempFile("stego_input", ".tmp", context.cacheDir)
         val tempPayloadFile = File.createTempFile("stego_decode_payload", ".tmp", context.cacheDir)
         val tempDecryptedFile = File.createTempFile("stego_decode_decrypted", ".tmp", context.cacheDir)
-        val tempInputFile = File.createTempFile("stego_decode_input", ".tmp", context.cacheDir)
 
         try {
-            // Buffer input to file so we can read it twice if needed (screenshot mode fallback)
+            options.onProgress?.invoke("Reading Image", 10, 0)
             FileOutputStream(tempInputFile).use { fos ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (inStream.read(buffer).also { bytesRead = it } != -1) {
-                    fos.write(buffer, 0, bytesRead)
-                }
+                Compressor.compressStream(inStream, fos, Compressor.Algorithm.NONE, 0)
             }
 
-            // Determine if SVLT or pixels
-            val extracted = FileInputStream(tempInputFile).use { fis ->
+            options.onProgress?.invoke("Extracting Payload", 30, tempInputFile.length())
+            // Try extracting chunk mode
+            var extracted = FileInputStream(tempInputFile).use { fis ->
                 FileOutputStream(tempPayloadFile).use { fos ->
                     StegoPng.extractFromPngStream(fis, fos)
                 }
             }
 
             if (!extracted) {
-                // Try pixel decode
+                // Try pixel LSB mode
                 FileInputStream(tempInputFile).use { fis ->
                     FileOutputStream(tempPayloadFile).use { fos ->
                         StegoPng.decodePixels(fis, fos)
@@ -155,69 +133,48 @@ class DefaultStegoEngine(private val context: Context) : StegoEngine {
                 }
             }
 
+            options.onProgress?.invoke("Reading Header & Decrypting", 60, tempPayloadFile.length())
             val header: StegoPng.Header
-            val payloadFis = FileInputStream(tempPayloadFile)
-
-            try {
-                options.onProgress?.invoke("Parsing Header", 0, tempPayloadFile.length())
-                header = StegoPng.Header.readFrom(payloadFis)
-
+            FileInputStream(tempPayloadFile).use { fis ->
+                header = StegoPng.Header.readFrom(fis)
                 FileOutputStream(tempDecryptedFile).use { fos ->
                     if (header.isEncrypted) {
-                        if (options.passphrase.isNullOrEmpty()) {
-                            throw Exception("Payload is encrypted, but no passphrase provided.")
-                        }
-                        options.onProgress?.invoke("Decrypting", 0, tempPayloadFile.length())
-                        CryptoEngine.decryptStream(payloadFis, fos, options.passphrase, header.salt, header.nonce, header.iterations)
+                        if (options.passphrase.isNullOrEmpty()) throw Exception("Passphrase required to decode.")
+                        CryptoEngine.decryptStream(fis, fos, options.passphrase, header.salt, header.nonce, header.iterations)
                     } else {
-                        val buffer = ByteArray(8192)
-                        var bytesRead: Int
-                        while (payloadFis.read(buffer).also { bytesRead = it } != -1) {
-                            fos.write(buffer, 0, bytesRead)
-                        }
+                        Compressor.compressStream(fis, fos, Compressor.Algorithm.NONE, 0)
                     }
                 }
-            } finally {
-                payloadFis.close()
             }
 
-            options.onProgress?.invoke("Decompressing", 0, tempDecryptedFile.length())
+            options.onProgress?.invoke("Decompressing", 90, tempDecryptedFile.length())
             FileInputStream(tempDecryptedFile).use { fis ->
-                val decompressor = InflaterInputStream(fis)
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
-                while (decompressor.read(buffer).also { bytesRead = it } != -1) {
-                    outStream.write(buffer, 0, bytesRead)
-                }
+                Compressor.decompressStream(fis, outStream, header.compression)
             }
 
-            options.onProgress?.invoke("Complete", 100, 100)
+            options.onProgress?.invoke("Done", 100, 100)
             StegoEngine.DecodeResult(warnings, header)
         } finally {
+            tempInputFile.delete()
             tempPayloadFile.delete()
             tempDecryptedFile.delete()
-            tempInputFile.delete()
         }
     }
 
+    /**
+     * Strictly controls mode to prevent 40x PNG size blowups.
+     * PIXEL LSB Mode is bounded to max 1MB payload to ensure we don't build 2GB uncompressed bitmaps.
+     */
     private fun determineMode(size: Long, requestedMode: StegoEngine.EncodeMode): StegoEngine.EncodeMode {
-        // Screenshot mode requires a full Bitmap in RAM.
-        // 10MB payload = ~150MB Bitmap required. We cap SCREENSHOT mode at 10MB to prevent OutOfMemoryError.
-        val maxScreenshotSize = 10L * 1024 * 1024
+        val maxPixelSizeLimit = 1L * 1024 * 1024 // 1 MB strict cap for LSB
 
-        if (requestedMode == StegoEngine.EncodeMode.SCREENSHOT && size > maxScreenshotSize) {
-            return StegoEngine.EncodeMode.COMPACT
+        if (requestedMode == StegoEngine.EncodeMode.PIXEL && size > maxPixelSizeLimit) {
+            return StegoEngine.EncodeMode.COMPACT // Force override
         }
 
         if (requestedMode != StegoEngine.EncodeMode.AUTO) return requestedMode
 
-        return if (size < 1024 * 512 || size > maxScreenshotSize) {
-            // Very small payloads fit nicely in chunks. Very large payloads MUST use chunks to stream safely.
-            StegoEngine.EncodeMode.COMPACT
-        } else {
-            // Medium payloads (512KB - 10MB) can safely fit in memory for pixel distribution.
-            StegoEngine.EncodeMode.SCREENSHOT
-        }
+        return if (size <= maxPixelSizeLimit) StegoEngine.EncodeMode.PIXEL else StegoEngine.EncodeMode.COMPACT
     }
 
     private fun getAdaptiveIterations(deviceClass: StegoEngine.DeviceClass): Int {
@@ -227,36 +184,8 @@ class DefaultStegoEngine(private val context: Context) : StegoEngine {
 
         return when (deviceClass) {
             StegoEngine.DeviceClass.LOW -> 50_000
-            StegoEngine.DeviceClass.MEDIUM -> 200_000
-            StegoEngine.DeviceClass.HIGH -> 500_000
+            StegoEngine.DeviceClass.MEDIUM -> 100_000
+            StegoEngine.DeviceClass.HIGH -> 300_000
         }
-    }
-
-    private fun generateCoverImage(mode: StegoEngine.EncodeMode): ByteArray {
-        val width = if (mode == StegoEngine.EncodeMode.COMPACT) 256 else 1024
-        val height = if (mode == StegoEngine.EncodeMode.COMPACT) 256 else 1024
-
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-
-        val paint = Paint()
-        val shader = LinearGradient(
-            0f, 0f, width.toFloat(), height.toFloat(),
-            Color.parseColor("#1a2a6c"),
-            Color.parseColor("#b21f1f"),
-            Shader.TileMode.CLAMP
-        )
-        paint.shader = shader
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-
-        paint.shader = null
-        paint.color = Color.WHITE
-        paint.textSize = if (mode == StegoEngine.EncodeMode.COMPACT) 32f else 64f
-        paint.textAlign = Paint.Align.CENTER
-        canvas.drawText("StegoVault Archive", width / 2f, height / 2f, paint)
-
-        val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-        return out.toByteArray()
     }
 }

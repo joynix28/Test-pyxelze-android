@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.navigation.fragment.NavHostFragment
+import androidx.navigation.ui.setupWithNavController
 import com.stegovault.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -15,14 +17,9 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.bottomNavigation.setOnItemSelectedListener { item ->
-            when(item.itemId) {
-                R.id.nav_home -> navigateTo(HomeFragment())
-                R.id.nav_tools -> navigateTo(ToolsFragment())
-                R.id.nav_settings -> navigateTo(SettingsFragment())
-            }
-            true
-        }
+        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+        val navController = navHostFragment.navController
+        binding.bottomNavigation.setupWithNavController(navController)
 
         if (savedInstanceState == null) {
             handleIntent(intent)
@@ -37,64 +34,40 @@ class MainActivity : AppCompatActivity() {
     private fun handleIntent(intent: Intent) {
         val action = intent.action
         val type = intent.type
+        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+        val navController = navHostFragment.navController
 
         when {
             Intent.ACTION_SEND == action && type != null -> {
                 val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
                 if (uri != null) {
-                    val fragment = EncryptFragment().apply {
-                        arguments = Bundle().apply {
-                            putParcelableArray("shared_uris", arrayOf(uri))
-                        }
-                    }
-                    navigateTo(fragment)
+                    val bundle = Bundle().apply { putParcelableArray("shared_uris", arrayOf(uri)) }
+                    navController.navigate(R.id.nav_vault, bundle)
                     return
                 }
             }
             Intent.ACTION_SEND_MULTIPLE == action && type != null -> {
                 val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
                 if (uris != null) {
-                    val fragment = EncryptFragment().apply {
-                        arguments = Bundle().apply {
-                            putParcelableArray("shared_uris", uris.toTypedArray())
-                        }
-                    }
-                    navigateTo(fragment)
+                    val bundle = Bundle().apply { putParcelableArray("shared_uris", uris.toTypedArray()) }
+                    navController.navigate(R.id.nav_vault, bundle)
                     return
                 }
             }
             Intent.ACTION_VIEW == action -> {
                 val uri = intent.data
                 if (uri != null) {
-                    val fragment = DecryptFragment().apply {
-                        arguments = Bundle().apply {
-                            putParcelable("view_uri", uri)
-                        }
-                    }
-                    navigateTo(fragment)
+                    val bundle = Bundle().apply { putParcelable("view_uri", uri) }
+                    navController.navigate(R.id.nav_vault, bundle)
                     return
                 }
             }
         }
 
-        // Default routing
         val destination = intent.getStringExtra("destination")
-        val fragment = when (destination) {
-            "tools" -> ToolsFragment()
-            "encrypt" -> EncryptFragment()
-            "decrypt" -> DecryptFragment()
-            "scan_qr" -> QrScannerFragment()
-            else -> HomeFragment()
+        when (destination) {
+            "vault" -> navController.navigate(R.id.nav_vault)
+            "scan_qr" -> navController.navigate(R.id.nav_qr)
         }
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.fragment_container, fragment)
-            .commit()
-    }
-
-    fun navigateTo(fragment: androidx.fragment.app.Fragment) {
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.fragment_container, fragment)
-            .addToBackStack(null)
-            .commit()
     }
 }

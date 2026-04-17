@@ -26,8 +26,8 @@ class StegoAppWidgetProvider : AppWidgetProvider() {
     ) {
         val views = RemoteViews(context.packageName, R.layout.widget_stego)
 
-        views.setOnClickPendingIntent(R.id.widget_btn_encrypt, getPendingIntent(context, "encrypt"))
-        views.setOnClickPendingIntent(R.id.widget_btn_decrypt, getPendingIntent(context, "decrypt"))
+        views.setOnClickPendingIntent(R.id.widget_btn_encrypt, getPendingIntent(context, "vault"))
+        views.setOnClickPendingIntent(R.id.widget_btn_decrypt, getPendingIntent(context, "vault"))
         views.setOnClickPendingIntent(R.id.widget_btn_scan_qr, getPendingIntent(context, "scan_qr"))
 
         appWidgetManager.updateAppWidget(appWidgetId, views)

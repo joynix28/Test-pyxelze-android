@@ -4,29 +4,32 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * Abstraction defining the Steganography and Encryption engine.
- * Inspired conceptually by tools like Roxify, abstracting the complex pipeline
- * to provide a clear, adaptive, and modern interface.
+ * Abstract Steganography engine handling logic and configurations.
+ * Concept inspired by Roxify. Made by JoyniX.
  */
 interface StegoEngine {
 
-    /**
-     * Encodes an input stream into a PNG image output stream according to the specified options.
-     */
-    suspend fun encode(inStream: InputStream, inputSize: Long, outStream: OutputStream, options: EncodeOptions): StegoResult
+    suspend fun encode(
+        inStream: InputStream,
+        inputSize: Long,
+        outStream: OutputStream,
+        options: EncodeOptions
+    ): StegoResult
 
-    /**
-     * Decodes a PNG image input stream into a binary output stream using the specified options.
-     */
-    suspend fun decode(inStream: InputStream, outStream: OutputStream, options: DecodeOptions): DecodeResult
+    suspend fun decode(
+        inStream: InputStream,
+        outStream: OutputStream,
+        options: DecodeOptions
+    ): DecodeResult
 
     data class EncodeOptions(
-        val entryCount: Int = 1,
         val passphrase: String? = null,
-        val compression: CompressionAlgo = CompressionAlgo.DEFLATE,
-        val compressionLevel: Int = 6, // 0-9 for deflate, standard is 6
+        val compression: Compressor.Algorithm = Compressor.Algorithm.DEFLATE,
+        val compressionLevel: Int = 6,
         val mode: EncodeMode = EncodeMode.AUTO,
-        val targetDeviceClass: DeviceClass = DeviceClass.MEDIUM
+        val entryCount: Int = 1,
+        val targetDeviceClass: DeviceClass = DeviceClass.MEDIUM,
+        val onProgress: ((phase: String, progress: Int) -> Unit)? = null
     )
 
     data class DecodeOptions(
@@ -45,9 +48,7 @@ interface StegoEngine {
         val header: StegoPng.Header? = null
     )
 
-    enum class CompressionAlgo { NONE, DEFLATE } // Zstd and BWT-ANS represent future extensions
-
-    enum class EncodeMode { AUTO, COMPACT, SCREENSHOT }
+    enum class EncodeMode { AUTO, COMPACT, PIXEL }
 
     enum class DeviceClass { LOW, MEDIUM, HIGH }
 }
