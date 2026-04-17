@@ -63,6 +63,14 @@ dependencies {
     // ML Kit Barcode Scanning
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
 
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Navigation
+    val nav_version = "2.7.7"
+    implementation("androidx.navigation:navigation-fragment-ktx:$nav_version")
+    implementation("androidx.navigation:navigation-ui-ktx:$nav_version")
+
     // QR Code generation (ZXing core is used for generating QR codes, the issue specifies ML kit for scanning, ZXing core is standard for generating)
     implementation("com.google.zxing:core:3.5.3")
 

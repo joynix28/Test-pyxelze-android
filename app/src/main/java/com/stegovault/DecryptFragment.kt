@@ -7,16 +7,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.stegovault.databinding.FragmentDecryptBinding
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.OutputStream
 
 class DecryptFragment : Fragment() {
 
@@ -37,7 +33,7 @@ class DecryptFragment : Fragment() {
     private val selectOutputDirectoryLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
-        uri?.let { performDecryption(it) }
+        uri?.let { startWorkManagerDecryption(it) }
     }
 
     override fun onCreateView(
@@ -49,7 +45,16 @@ class DecryptFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+
+
         super.onViewCreated(view, savedInstanceState)
+
+        arguments?.getParcelable<Uri>("view_uri")?.let { uri ->
+            targetFile = uri
+            Toast.makeText(context, "Shared file ready to decrypt", Toast.LENGTH_SHORT).show()
+        }
+
+
 
         parentFragmentManager.setFragmentResultListener("qr_passphrase", viewLifecycleOwner) { _, bundle ->
             val scannedPass = bundle.getString("passphrase")
@@ -73,73 +78,46 @@ class DecryptFragment : Fragment() {
         }
     }
 
-    private fun performDecryption(outputDirUri: Uri) {
+    private fun startWorkManagerDecryption(outputDirUri: Uri) {
         val passphrase = binding.etPassphrase.text.toString()
         val uri = targetFile ?: return
 
         binding.btnStartDecrypt.isEnabled = false
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    val inStream = requireContext().contentResolver.openInputStream(uri)
-                    val bytes = inStream?.readBytes() ?: throw Exception("Cannot read file")
+        val inputData = Data.Builder()
+            .putString("input_uri", uri.toString())
+            .putString("output_dir_uri", outputDirUri.toString())
+            .putString("passphrase", passphrase)
+            .build()
 
-                    var payload = bytes
-                    val signature = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
-                    if (bytes.size > 8 && bytes.copyOfRange(0, 8).contentEquals(signature)) {
-                        payload = StegoPng.extractFromPng(bytes) ?: throw Exception("No SVLT chunk found in PNG")
-                    }
+        val decodeWorkRequest = OneTimeWorkRequestBuilder<DecodeWorker>()
+            .setInputData(inputData)
+            .build()
 
-                    val (header, ciphertext) = StegoPng.parsePayload(payload)
+        binding.progressBar.visibility = View.VISIBLE
+        binding.tvProgress.visibility = View.VISIBLE
 
-                    val compressedData = CryptoEngine.decrypt(
-                        ciphertext,
-                        passphrase,
-                        header.salt,
-                        header.nonce,
-                        header.iterations
-                    )
+        val workManager = WorkManager.getInstance(requireContext())
+        workManager.enqueue(decodeWorkRequest)
 
-                    val decompressedStream = ArchiveManager.decompress(ByteArrayInputStream(compressedData))
-
-                    val rootDir = DocumentFile.fromTreeUri(requireContext(), outputDirUri)
-                        ?: throw Exception("Invalid output directory")
-
-                    ArchiveManager.unpack(decompressedStream, header.entryCount) { entryHeader, entryStream ->
-                        val pathParts = entryHeader.path.split("/")
-                        var currentDir = rootDir
-
-                        // Navigate or create subdirectories
-                        for (i in 0 until pathParts.size - 1) {
-                            val dirName = pathParts[i]
-                            currentDir = currentDir.findFile(dirName) ?: currentDir.createDirectory(dirName)
-                                ?: throw Exception("Cannot create directory: $dirName")
-                        }
-
-                        val fileName = pathParts.last()
-                        if (entryHeader.isDirectory) {
-                            currentDir.findFile(fileName) ?: currentDir.createDirectory(fileName)
-                        } else if (entryStream != null) {
-                            val newFile = currentDir.createFile("application/octet-stream", fileName)
-                                ?: throw Exception("Cannot create file: $fileName")
-
-                            requireContext().contentResolver.openOutputStream(newFile.uri)?.use { outStream ->
-                                val buffer = ByteArray(8192)
-                                var bytesRead: Int
-                                while (entryStream.read(buffer).also { bytesRead = it } != -1) {
-                                    outStream.write(buffer, 0, bytesRead)
-                                }
-                            }
-                        }
-                    }
+        workManager.getWorkInfoByIdLiveData(decodeWorkRequest.id).observe(viewLifecycleOwner) { workInfo ->
+            if (workInfo != null) {
+                val progress = workInfo.progress.getString("progress")
+                if (progress != null) {
+                    binding.tvProgress.text = progress
                 }
-                Toast.makeText(context, "Decryption successful", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Toast.makeText(context, "Decryption failed: ${e.message}", Toast.LENGTH_LONG).show()
-            } finally {
-                binding.btnStartDecrypt.isEnabled = true
+                if (workInfo.state == WorkInfo.State.SUCCEEDED) {
+                    binding.progressBar.visibility = View.GONE
+                    binding.tvProgress.text = "Complete"
+                    Toast.makeText(context, "Decryption successful", Toast.LENGTH_SHORT).show()
+                    binding.btnStartDecrypt.isEnabled = true
+                } else if (workInfo.state == WorkInfo.State.FAILED) {
+                    binding.progressBar.visibility = View.GONE
+                    val error = workInfo.outputData.getString("error")
+                    binding.tvProgress.text = "Error: $error"
+                    Toast.makeText(context, "Decryption failed: $error", Toast.LENGTH_LONG).show()
+                    binding.btnStartDecrypt.isEnabled = true
+                }
             }
         }
     }

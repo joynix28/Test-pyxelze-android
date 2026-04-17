@@ -11,7 +11,7 @@
         android:id="@+id/widget_btn_encrypt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Encrypt"
+        android:text="@string/action_encrypt"
         android:layout_weight="1"
         android:layout_marginEnd="4dp"/>
 
@@ -19,7 +19,7 @@
         android:id="@+id/widget_btn_decrypt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Decrypt"
+        android:text="@string/action_decrypt"
         android:layout_weight="1"
         android:layout_marginEnd="4dp"/>
 
@@ -27,7 +27,7 @@
         android:id="@+id/widget_btn_scan_qr"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Scan QR"
+        android:text="@string/action_scan_qr"
         android:layout_weight="1"/>
 
 </LinearLayout>

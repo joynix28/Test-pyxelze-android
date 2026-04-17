@@ -1,7 +1,11 @@
 package com.stegovault
 
+import java.io.InputStream
+import java.io.OutputStream
 import java.security.SecureRandom
 import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.CipherOutputStream
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
@@ -48,6 +52,30 @@ object CryptoEngine {
         return cipher.doFinal(plaintext)
     }
 
+    fun encryptStream(
+        inStream: InputStream,
+        outStream: OutputStream,
+        passphrase: String,
+        salt: ByteArray,
+        nonce: ByteArray,
+        iterations: Int = ITERATIONS
+    ) {
+        val keyBytes = deriveKey(passphrase, salt, iterations)
+        val secretKey = SecretKeySpec(keyBytes, "AES")
+
+        val cipher = Cipher.getInstance(ALGORITHM)
+        val gcmSpec = GCMParameterSpec(GCM_TAG_LENGTH, nonce)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec)
+
+        val cipherOut = CipherOutputStream(outStream, cipher)
+        val buffer = ByteArray(8192)
+        var bytesRead: Int
+        while (inStream.read(buffer).also { bytesRead = it } != -1) {
+            cipherOut.write(buffer, 0, bytesRead)
+        }
+        cipherOut.close()
+    }
+
     fun decrypt(
         ciphertextAndTag: ByteArray,
         passphrase: String,
@@ -63,5 +91,29 @@ object CryptoEngine {
         cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
 
         return cipher.doFinal(ciphertextAndTag)
+    }
+
+    fun decryptStream(
+        inStream: InputStream,
+        outStream: OutputStream,
+        passphrase: String,
+        salt: ByteArray,
+        nonce: ByteArray,
+        iterations: Int = ITERATIONS
+    ) {
+        val keyBytes = deriveKey(passphrase, salt, iterations)
+        val secretKey = SecretKeySpec(keyBytes, "AES")
+
+        val cipher = Cipher.getInstance(ALGORITHM)
+        val gcmSpec = GCMParameterSpec(GCM_TAG_LENGTH, nonce)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
+
+        val cipherIn = CipherInputStream(inStream, cipher)
+        val buffer = ByteArray(8192)
+        var bytesRead: Int
+        while (cipherIn.read(buffer).also { bytesRead = it } != -1) {
+            outStream.write(buffer, 0, bytesRead)
+        }
+        cipherIn.close()
     }
 }

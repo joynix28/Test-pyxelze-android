@@ -16,7 +16,7 @@ object ArchiveManager {
         val path: String,
         val isDirectory: Boolean,
         val size: Long,
-        val inputStream: InputStream? = null
+        val uri: android.net.Uri? = null
     )
 
     /**
@@ -32,7 +32,7 @@ object ArchiveManager {
      * [Entries Data]
      * After all headers, the raw data of files in the same order.
      */
-    fun pack(entries: List<ArchiveEntry>, out: OutputStream) {
+    fun pack(context: android.content.Context, entries: List<ArchiveEntry>, out: OutputStream) {
         // Write headers
         for (entry in entries) {
             val pathBytes = entry.path.toByteArray(StandardCharsets.UTF_8)
@@ -49,12 +49,13 @@ object ArchiveManager {
         // Write data
         val buffer = ByteArray(8192)
         for (entry in entries) {
-            if (!entry.isDirectory && entry.inputStream != null) {
-                var bytesRead: Int
-                while (entry.inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    out.write(buffer, 0, bytesRead)
+            if (!entry.isDirectory && entry.uri != null) {
+                context.contentResolver.openInputStream(entry.uri)?.use { inputStream ->
+                    var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        out.write(buffer, 0, bytesRead)
+                    }
                 }
-                entry.inputStream.close()
             }
         }
     }
@@ -108,7 +109,7 @@ object ArchiveManager {
                 val boundedStream = BoundedInputStream(inStream, header.size)
                 onEntry(header, boundedStream)
                 // Consume any remaining bytes if the callback didn't read everything
-                boundedStream.skip(header.size)
+                boundedStream.consumeRemaining()
             }
         }
     }
@@ -133,10 +134,26 @@ object ArchiveManager {
 
         override fun skip(n: Long): Long {
             if (bytesRead >= limit) return 0
-            val maxSkip = minOf(n, limit - bytesRead)
-            val result = inStream.skip(maxSkip)
-            bytesRead += result
-            return result
+            var remaining = minOf(n, limit - bytesRead)
+            var skippedTotal = 0L
+            while (remaining > 0) {
+                val skipped = inStream.skip(remaining)
+                if (skipped <= 0) break // EOF or cannot skip
+                remaining -= skipped
+                skippedTotal += skipped
+            }
+            bytesRead += skippedTotal
+            return skippedTotal
+        }
+
+        fun consumeRemaining() {
+            val remaining = limit - bytesRead
+            if (remaining > 0) {
+                val buffer = ByteArray(8192)
+                while (read(buffer) != -1) {
+                    // Just read to consume the stream
+                }
+            }
         }
     }
 

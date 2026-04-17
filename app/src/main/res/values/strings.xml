@@ -12,4 +12,7 @@
     <string name="label_language">Language</string>
     <string name="mode_stego_png">Stego PNG</string>
     <string name="mode_encrypted_archive">Encrypted Archive (.stg)</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_tools">Tools</string>
+    <string name="nav_settings">Settings</string>
 </resources>
