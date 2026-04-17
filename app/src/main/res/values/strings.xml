@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">StegoVault</string>
+    <string name="action_encrypt">Encrypt</string>
+    <string name="action_decrypt">Decrypt</string>
+    <string name="action_scan_qr">Scan QR Code</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_select_files">Select Files</string>
+    <string name="action_select_folder">Select Folder</string>
+    <string name="action_select_file">Select File</string>
+    <string name="action_generate_qr">QR</string>
+    <string name="label_passphrase">Passphrase</string>
+    <string name="label_language">Language</string>
+    <string name="mode_stego_png">Stego PNG</string>
+    <string name="mode_encrypted_archive">Encrypted Archive (.stg)</string>
+</resources>

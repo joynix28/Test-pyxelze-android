@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="#DDFFFFFF"
+    android:padding="8dp"
+    android:gravity="center">
+
+    <Button
+        android:id="@+id/widget_btn_encrypt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Encrypt"
+        android:layout_weight="1"
+        android:layout_marginEnd="4dp"/>
+
+    <Button
+        android:id="@+id/widget_btn_decrypt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Decrypt"
+        android:layout_weight="1"
+        android:layout_marginEnd="4dp"/>
+
+    <Button
+        android:id="@+id/widget_btn_scan_qr"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scan QR"
+        android:layout_weight="1"/>
+
+</LinearLayout>
