@@ -255,6 +255,33 @@ class EncryptFragment : Fragment() {
     }
 
     private fun generateDummyPng(): ByteArray {
+        val width = 512
+        val height = 512
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+
+        val paint = android.graphics.Paint()
+        val shader = android.graphics.LinearGradient(
+            0f, 0f, width.toFloat(), height.toFloat(),
+            Color.parseColor("#1a2a6c"),
+            Color.parseColor("#b21f1f"),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        paint.shader = shader
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+
+        paint.shader = null
+        paint.color = Color.WHITE
+        paint.textSize = 48f
+        paint.textAlign = android.graphics.Paint.Align.CENTER
+        canvas.drawText("StegoVault Archive", width / 2f, height / 2f, paint)
+
+        val out = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        return out.toByteArray()
+    }
+
+    private fun _generateDummyPngOld(): ByteArray {
         val base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
         return android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
     }

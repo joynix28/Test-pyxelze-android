@@ -123,7 +123,18 @@ object StegoPng {
                 buffer.int // skip CRC
                 return chunkData
             } else {
-                buffer.position(buffer.position() + length + 4) // skip data and CRC
+                if (length > 0) {
+                    val skip = length + 4 // skip data and CRC
+                    if (buffer.remaining() >= skip) {
+                        buffer.position(buffer.position() + skip)
+                    } else {
+                        break
+                    }
+                } else if (length == 0) {
+                    buffer.position(buffer.position() + 4) // skip CRC
+                } else {
+                   break // invalid length
+                }
             }
         }
         return null
