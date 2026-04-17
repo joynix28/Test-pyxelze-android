@@ -111,12 +111,12 @@ class DefaultStegoEngine(private val context: Context) : StegoEngine {
         val tempDecryptedFile = File.createTempFile("stego_decode_decrypted", ".tmp", context.cacheDir)
 
         try {
-            options.onProgress?.invoke("Reading Image", 10, 0)
+            options.onProgress?.invoke("Reading Image", 10, 100)
             FileOutputStream(tempInputFile).use { fos ->
                 Compressor.compressStream(inStream, fos, Compressor.Algorithm.NONE, 0)
             }
 
-            options.onProgress?.invoke("Extracting Payload", 30, tempInputFile.length())
+            options.onProgress?.invoke("Extracting Payload", 30, 100)
             // Try extracting chunk mode
             var extracted = FileInputStream(tempInputFile).use { fis ->
                 FileOutputStream(tempPayloadFile).use { fos ->
@@ -133,7 +133,7 @@ class DefaultStegoEngine(private val context: Context) : StegoEngine {
                 }
             }
 
-            options.onProgress?.invoke("Reading Header & Decrypting", 60, tempPayloadFile.length())
+            options.onProgress?.invoke("Reading Header & Decrypting", 60, 100)
             val header: StegoPng.Header
             FileInputStream(tempPayloadFile).use { fis ->
                 header = StegoPng.Header.readFrom(fis)
@@ -147,7 +147,7 @@ class DefaultStegoEngine(private val context: Context) : StegoEngine {
                 }
             }
 
-            options.onProgress?.invoke("Decompressing", 90, tempDecryptedFile.length())
+            options.onProgress?.invoke("Decompressing", 90, 100)
             FileInputStream(tempDecryptedFile).use { fis ->
                 Compressor.decompressStream(fis, outStream, header.compression)
             }

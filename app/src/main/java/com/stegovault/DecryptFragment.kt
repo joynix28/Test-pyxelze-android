@@ -103,9 +103,19 @@ class DecryptFragment : Fragment() {
         workManager.getWorkInfoByIdLiveData(decodeWorkRequest.id).observe(viewLifecycleOwner) { workInfo ->
             if (workInfo != null) {
                 val progress = workInfo.progress.getString("progress")
+                val percent = workInfo.progress.getInt("progress_percent", -1)
+
                 if (progress != null) {
-                    binding.tvProgress.text = progress
+                    binding.tvProgress.text = if (percent >= 0) "$progress ($percent%)" else progress
                 }
+
+                if (percent >= 0) {
+                    binding.progressBar.isIndeterminate = false
+                    binding.progressBar.progress = percent
+                } else {
+                    binding.progressBar.isIndeterminate = true
+                }
+
                 if (workInfo.state == WorkInfo.State.SUCCEEDED) {
                     binding.progressBar.visibility = View.GONE
                     binding.tvProgress.text = "Complete"
