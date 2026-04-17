@@ -21,7 +21,7 @@
 
     <fragment
         android:id="@+id/nav_qr"
-        android:name="com.stegovault.QrFragment"
+        android:name="com.stegovault.QrScannerFragment"
         android:label="QR Scanner" />
 
     <fragment
