@@ -1,3 +1,18 @@
 <resources>
-    <string name="app_name">Roxify</string>
+    <string name="app_name">Pyxelze Roxify</string>
+    <string name="action_encrypt">Encrypt Files</string>
+    <string name="action_decrypt">Decrypt Files</string>
+    <string name="action_scan_qr">Scan QR Code</string>
+    <string name="action_settings">Settings</string>
+    <string name="label_passphrase">Passphrase</string>
+    <string name="label_language">Language</string>
+    <string name="label_iterations">PBKDF2 Iterations</string>
+    <string name="msg_empty_fields">Please fill all required fields.</string>
+    <string name="msg_processing">Processing...</string>
+    <string name="msg_success">Operation successful!</string>
+    <string name="msg_error">Operation failed: %1$s</string>
+    <string name="title_home">Home</string>
+    <string name="title_encrypt">Encrypt &amp; Hide</string>
+    <string name="title_decrypt">Extract &amp; Decrypt</string>
+    <string name="title_settings">Settings</string>
 </resources>

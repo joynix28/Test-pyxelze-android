@@ -7,7 +7,7 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 
-class ArchiveHelperTest {
+class CustomArchiveHelperTest {
 
     private lateinit var tempDir: File
 
@@ -17,26 +17,33 @@ class ArchiveHelperTest {
     }
 
     @Test
-    fun testCompressAndDecompress() {
+    fun testBuildAndExtract() {
         val file1 = File(tempDir, "file1.txt")
         file1.writeText("Hello World!")
-        val file2 = File(tempDir, "file2.txt")
+        val dir1 = File(tempDir, "mydir")
+        dir1.mkdirs()
+        val file2 = File(dir1, "file2.txt")
         file2.writeText("Testing 123")
 
-        val zipFile = File(tempDir, "output.zip")
-        ArchiveHelper.compressFiles(listOf(file1, file2), zipFile)
+        val filesToArchive = listOf(file1, dir1, file2)
+        val archiveBytes = CustomArchiveHelper.buildArchive(tempDir, filesToArchive)
 
-        assertTrue(zipFile.exists())
-        assertTrue(zipFile.length() > 0)
+        assertTrue(archiveBytes.isNotEmpty())
 
         val outputDir = File(tempDir, "extracted")
-        ArchiveHelper.decompressFiles(zipFile, outputDir)
+        outputDir.mkdirs()
+
+        CustomArchiveHelper.extractArchive(archiveBytes, outputDir, 3, isCompressed = true)
 
         val extracted1 = File(outputDir, "file1.txt")
-        val extracted2 = File(outputDir, "file2.txt")
+        val extractedDir = File(outputDir, "mydir")
+        val extracted2 = File(extractedDir, "file2.txt")
 
         assertTrue(extracted1.exists())
         assertEquals("Hello World!", extracted1.readText())
+
+        assertTrue(extractedDir.exists())
+        assertTrue(extractedDir.isDirectory)
 
         assertTrue(extracted2.exists())
         assertEquals("Testing 123", extracted2.readText())

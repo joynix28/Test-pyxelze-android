@@ -1,60 +1,70 @@
 package com.pyxelze.roxify
 
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import com.pyxelze.roxify.ui.MainScreen
+import androidx.compose.runtime.Composable
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.pyxelze.roxify.ui.DecryptScreen
+import com.pyxelze.roxify.ui.EncryptScreen
+import com.pyxelze.roxify.ui.HomeScreen
+import com.pyxelze.roxify.ui.QrScannerScreen
+import com.pyxelze.roxify.ui.QrGeneratorScreen
+import com.pyxelze.roxify.ui.SettingsScreen
 
 class MainActivity : ComponentActivity() {
-
-    // Safely store URIs temporarily
-    private var onImagePicked: ((Uri?) -> Unit)? = null
-    private var onFilesPicked: ((List<Uri>) -> Unit)? = null
-    private var onSaveImage: ((Uri?) -> Unit)? = null
-    private var onExtractDir: ((Uri?) -> Unit)? = null
-
-    // Launchers for picking files/directories/saving
-    private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        onImagePicked?.invoke(uri)
-    }
-
-    private val pickFilesLauncher = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        onFilesPicked?.invoke(uris)
-    }
-
-    private val saveImageLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
-        onSaveImage?.invoke(uri)
-    }
-
-    private val extractDirLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        onExtractDir?.invoke(uri)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val widgetAction = intent.getStringExtra("WIDGET_ACTION")
+
         setContent {
-            MainScreen(
-                onPickCarrierImage = { callback ->
-                    onImagePicked = callback
-                    pickImageLauncher.launch("image/*")
-                },
-                onPickFilesToHide = { callback ->
-                    onFilesPicked = callback
-                    pickFilesLauncher.launch("*/*")
-                },
-                onSaveStegoImage = { callback ->
-                    onSaveImage = callback
-                    saveImageLauncher.launch("stego_archive.png")
-                },
-                onPickExtractDirectory = { callback ->
-                    onExtractDir = callback
-                    extractDirLauncher.launch(null)
-                },
-                context = this
-            )
+            RoxifyApp(startDestination = getStartDestination(widgetAction))
+        }
+    }
+
+    private fun getStartDestination(action: String?): String {
+        return when (action) {
+            "ENCRYPT" -> "encrypt"
+            "DECRYPT" -> "decrypt"
+            "SCAN" -> "scanner"
+            else -> "home"
+        }
+    }
+}
+
+@Composable
+fun RoxifyApp(startDestination: String) {
+    val navController = rememberNavController()
+
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable("home") {
+            HomeScreen(navController)
+        }
+        composable("encrypt") {
+            EncryptScreen(navController)
+        }
+        composable("decrypt") {
+            DecryptScreen(navController)
+        }
+        composable("scanner") {
+            QrScannerScreen { qrResult ->
+                navController.popBackStack()
+                navController.navigate("decrypt_with_pass/$qrResult")
+            }
+        }
+        composable("generate_qr") {
+            QrGeneratorScreen(navController)
+        }
+        composable("decrypt_with_pass/{pass}") { backStackEntry ->
+            val pass = backStackEntry.arguments?.getString("pass") ?: ""
+            DecryptScreen(navController, initialPassword = pass)
+        }
+        composable("settings") {
+            SettingsScreen(navController)
         }
     }
 }

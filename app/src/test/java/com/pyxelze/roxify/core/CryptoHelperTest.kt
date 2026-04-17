@@ -1,9 +1,9 @@
 package com.pyxelze.roxify.core
 
 import org.junit.Assert.assertArrayEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.security.SecureRandom
 
 class CryptoHelperTest {
 
@@ -11,18 +11,16 @@ class CryptoHelperTest {
     fun testEncryptionAndDecryption() {
         val plaintext = "Secret Message".toByteArray(Charsets.UTF_8)
         val password = "StrongPassword123".toCharArray()
+        val entryCount = 5
 
-        val encryptedData = CryptoHelper.encrypt(plaintext, password)
+        val encryptedData = CryptoHelper.encrypt(plaintext, password, entryCount, 1000) // Lower iterations for fast test
 
-        // Encrypted data should be longer than plaintext due to salt and IV and GCM tag
-        assertTrue(encryptedData.size > plaintext.size)
-        // Should not be equal to plaintext
-        val plainString = String(plaintext, Charsets.UTF_8)
-        val encString = String(encryptedData, Charsets.UTF_8)
-        assertNotEquals(plainString, encString)
+        // Header is 52 bytes, plus AES GCM tag is 16 bytes
+        assertTrue(encryptedData.size == 52 + 16 + plaintext.size)
 
-        val decryptedData = CryptoHelper.decrypt(encryptedData, password)
+        val (decryptedData, outEntryCount) = CryptoHelper.decrypt(encryptedData, password)
         assertArrayEquals(plaintext, decryptedData)
+        assertEquals(entryCount, outEntryCount)
     }
 
     @Test(expected = Exception::class)
@@ -31,13 +29,8 @@ class CryptoHelperTest {
         val password = "StrongPassword123".toCharArray()
         val wrongPassword = "WrongPassword".toCharArray()
 
-        val encryptedData = CryptoHelper.encrypt(plaintext, password)
+        val encryptedData = CryptoHelper.encrypt(plaintext, password, 1, 1000)
 
-        // This should throw AEADBadTagException
         CryptoHelper.decrypt(encryptedData, wrongPassword)
-    }
-
-    private fun assertTrue(condition: Boolean) {
-        org.junit.Assert.assertTrue(condition)
     }
 }
