@@ -1,14 +1,15 @@
 package com.stegovault
 
+import android.content.Context
+import android.net.Uri
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.zip.DeflaterOutputStream
-import java.util.zip.InflaterInputStream
 
 /**
- * Packs and unpacks files into a custom binary archive format using streams.
+ * Sequential file archiver supporting streams.
+ * Made by JoyniX.
  */
 object ArchiveManager {
 
@@ -16,24 +17,10 @@ object ArchiveManager {
         val path: String,
         val isDirectory: Boolean,
         val size: Long,
-        val uri: android.net.Uri? = null
+        val uri: Uri? = null
     )
 
-    /**
-     * Packs entries into a single OutputStream.
-     * Format:
-     * [Entries Headers]
-     * For each entry:
-     * - 4 bytes: path length N (uint32)
-     * - N bytes: UTF-8 path
-     * - 1 byte: type (0 = file, 1 = dir)
-     * - 8 bytes: uncompressed size (0 for dir)
-     *
-     * [Entries Data]
-     * After all headers, the raw data of files in the same order.
-     */
-    fun pack(context: android.content.Context, entries: List<ArchiveEntry>, out: OutputStream) {
-        // Write headers
+    fun pack(context: Context, entries: List<ArchiveEntry>, out: OutputStream) {
         for (entry in entries) {
             val pathBytes = entry.path.toByteArray(StandardCharsets.UTF_8)
             val pathLenBuffer = ByteBuffer.allocate(4).putInt(pathBytes.size).array()
@@ -46,7 +33,6 @@ object ArchiveManager {
             out.write(sizeBuffer)
         }
 
-        // Write data
         val buffer = ByteArray(8192)
         for (entry in entries) {
             if (!entry.isDirectory && entry.uri != null) {
@@ -75,15 +61,11 @@ object ArchiveManager {
         }
     }
 
-    /**
-     * Unpacks entries from the stream and calls a callback for each file's data.
-     */
     fun unpack(inStream: InputStream, entryCount: Int, onEntry: (ArchiveEntryHeader, InputStream?) -> Unit) {
         val headers = mutableListOf<ArchiveEntryHeader>()
         val intBuffer = ByteArray(4)
         val longBuffer = ByteArray(8)
 
-        // Read headers
         for (i in 0 until entryCount) {
             readFully(inStream, intBuffer)
             val pathLen = ByteBuffer.wrap(intBuffer).int
@@ -101,14 +83,12 @@ object ArchiveManager {
             headers.add(ArchiveEntryHeader(path, isDirectory, size))
         }
 
-        // Read data and call callback
         for (header in headers) {
             if (header.isDirectory) {
                 onEntry(header, null)
             } else {
                 val boundedStream = BoundedInputStream(inStream, header.size)
                 onEntry(header, boundedStream)
-                // Consume any remaining bytes if the callback didn't read everything
                 boundedStream.consumeRemaining()
             }
         }
@@ -132,36 +112,12 @@ object ArchiveManager {
             return result
         }
 
-        override fun skip(n: Long): Long {
-            if (bytesRead >= limit) return 0
-            var remaining = minOf(n, limit - bytesRead)
-            var skippedTotal = 0L
-            while (remaining > 0) {
-                val skipped = inStream.skip(remaining)
-                if (skipped <= 0) break // EOF or cannot skip
-                remaining -= skipped
-                skippedTotal += skipped
-            }
-            bytesRead += skippedTotal
-            return skippedTotal
-        }
-
         fun consumeRemaining() {
             val remaining = limit - bytesRead
             if (remaining > 0) {
                 val buffer = ByteArray(8192)
-                while (read(buffer) != -1) {
-                    // Just read to consume the stream
-                }
+                while (read(buffer) != -1) { }
             }
         }
-    }
-
-    fun compress(out: OutputStream): OutputStream {
-        return DeflaterOutputStream(out)
-    }
-
-    fun decompress(inStream: InputStream): InputStream {
-        return InflaterInputStream(inStream)
     }
 }

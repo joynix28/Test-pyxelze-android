@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.StegoVault" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.StegoVault" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">#6750A4</item>
         <item name="colorOnPrimary">#FFFFFF</item>

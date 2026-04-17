@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">StegoVault</string>
-    <string name="action_encrypt">Chiffrer</string>
-    <string name="action_decrypt">Déchiffrer</string>
+    <string name="app_name">StegoVault par JoyniX</string>
+    <string name="action_encrypt">Encoder</string>
+    <string name="action_decrypt">Décoder</string>
     <string name="action_scan_qr">Scanner un QR code</string>
     <string name="action_settings">Paramètres</string>
     <string name="action_select_files">Sélectionner des fichiers</string>
@@ -13,6 +13,13 @@
     <string name="mode_stego_png">Stégo PNG</string>
     <string name="mode_encrypted_archive">Archive chiffrée (.stg)</string>
     <string name="nav_home">Accueil</string>
+    <string name="nav_vault">Coffre</string>
     <string name="nav_tools">Outils</string>
     <string name="nav_settings">Paramètres</string>
+    <string name="about_title">À propos et Légal</string>
+    <string name="about_author">Créé par JoyniX</string>
+    <string name="about_website">Site Web: https://joynix.fr</string>
+    <string name="about_contact">Contact: contact@chell.fr</string>
+    <string name="about_license">Licence: Apache 2.0. C\'est une application gratuite et open source.</string>
+    <string name="about_credits">Concepts originaux inspirés de Roxify (https://github.com/RoxasYTB/roxify) et Pyxelze.</string>
 </resources>

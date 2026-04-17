@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/nav_home">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="com.stegovault.HomeFragment"
+        android:label="Home" />
+
+    <fragment
+        android:id="@+id/nav_vault"
+        android:name="com.stegovault.VaultFragment"
+        android:label="Vault" />
+
+    <fragment
+        android:id="@+id/nav_tools"
+        android:name="com.stegovault.ToolsFragment"
+        android:label="Tools" />
+
+    <fragment
+        android:id="@+id/nav_qr"
+        android:name="com.stegovault.QrFragment"
+        android:label="QR Scanner" />
+
+    <fragment
+        android:id="@+id/nav_settings"
+        android:name="com.stegovault.SettingsFragment"
+        android:label="Settings" />
+
+    <fragment
+        android:id="@+id/nav_about"
+        android:name="com.stegovault.AboutFragment"
+        android:label="About" />
+
+</navigation>

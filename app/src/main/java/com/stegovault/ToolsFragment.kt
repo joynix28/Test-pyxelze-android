@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
 import com.stegovault.databinding.FragmentToolsBinding
 
 class ToolsFragment : Fragment() {
@@ -13,10 +14,7 @@ class ToolsFragment : Fragment() {
     private var _binding: FragmentToolsBinding? = null
     private val binding get() = _binding!!
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentToolsBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -25,13 +23,20 @@ class ToolsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         binding.btnClipboard.setOnClickListener {
-            // Simplified stub for Clipboard locker
-            Toast.makeText(context, "Clipboard locker initiated", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Clipboard Locker not yet enabled", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnDiagnostics.setOnClickListener {
-            Toast.makeText(context, "Running diagnostic benchmark...", Toast.LENGTH_SHORT).show()
-            // Stub for running device diagnostics to determine LOW/MEDIUM/HIGH profile
+            Toast.makeText(context, "Running Device Diagnostics...", Toast.LENGTH_SHORT).show()
+            // Placeholder: would benchmark AES-GCM times to set low/medium/high
+        }
+
+        binding.btnCameraStego.setOnClickListener {
+            Toast.makeText(context, "Instant Camera Vault triggered", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnMultipart.setOnClickListener {
+            Toast.makeText(context, "Multi-part Archive Manager", Toast.LENGTH_SHORT).show()
         }
     }
 
