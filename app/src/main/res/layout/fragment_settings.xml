@@ -6,38 +6,32 @@
     android:padding="16dp">
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/action_settings"
-        android:textSize="24sp"
+        android:text="@string/title_settings"
+        android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="24dp" />
+        android:layout_marginBottom="16dp"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/label_language"
-        android:textSize="18sp"
-        android:layout_marginBottom="8dp" />
-
-    <Spinner
-        android:id="@+id/spinner_language"
+    <Button
+        android:id="@+id/btn_settings_about"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp" />
+        android:text="About &amp; Licenses"
+        android:layout_marginBottom="8dp"/>
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="PBKDF2 Iterations"
-        android:textSize="18sp"
-        android:layout_marginBottom="8dp" />
-
-    <EditText
-        android:id="@+id/et_iterations"
+    <Button
+        android:id="@+id/btn_settings_language"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:inputType="number"
-        android:text="200000" />
+        android:text="Change Language (FR/EN)"
+        android:layout_marginBottom="8dp"/>
+
+    <Button
+        android:id="@+id/btn_settings_theme"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Toggle Dark Mode"
+        android:layout_marginBottom="8dp"/>
 
 </LinearLayout>

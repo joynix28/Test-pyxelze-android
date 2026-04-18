@@ -1,67 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/windowBackground">
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="32dp">
 
-    <androidx.core.widget.NestedScrollView
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Made by JoyniX"
+        android:textSize="16sp"
+        android:textStyle="italic"
+        android:layout_marginBottom="48dp" />
+
+    <Button
+        android:id="@+id/btn_encrypt"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fillViewport="true">
+        android:layout_height="64dp"
+        android:text="@string/action_encrypt"
+        android:layout_marginBottom="16dp" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="32dp">
+    <Button
+        android:id="@+id/btn_decrypt"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:text="@string/action_decrypt"
+        android:layout_marginBottom="16dp" />
 
-            <ImageView
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:src="@mipmap/ic_launcher"
-                android:layout_marginBottom="16dp"
-                android:contentDescription="App Logo"/>
+    <Button
+        android:id="@+id/btn_scan"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:text="@string/action_scan_qr" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/app_name"
-                android:textSize="28sp"
-                android:textStyle="bold"
-                android:textColor="?attr/colorPrimary"
-                android:layout_marginBottom="48dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_create_stego"
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:text="Create Stego Archive"
-                app:icon="@android:drawable/ic_secure"
-                app:cornerRadius="12dp"
-                android:layout_marginBottom="16dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_scan_qr"
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:text="@string/action_scan_qr"
-                app:icon="@android:drawable/ic_menu_camera"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                app:cornerRadius="12dp"
-                android:layout_marginBottom="16dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_tools"
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:text="More Tools"
-                app:icon="@android:drawable/ic_menu_manage"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                app:cornerRadius="12dp"
-                android:layout_marginBottom="16dp" />
-
-        </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</LinearLayout>

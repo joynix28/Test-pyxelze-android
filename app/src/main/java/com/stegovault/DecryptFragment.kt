@@ -1,139 +1,86 @@
 package com.stegovault
 
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import com.stegovault.databinding.FragmentDecryptBinding
+import java.io.File
 
 class DecryptFragment : Fragment() {
 
-    private var _binding: FragmentDecryptBinding? = null
-    private val binding get() = _binding!!
+    private lateinit var tvSelectedFile: TextView
+    private lateinit var etPassphrase: EditText
+    private lateinit var progressBar: ProgressBar
+    private var selectedUri: String? = null
 
-    private var targetFile: Uri? = null
-
-    private val pickFileLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            targetFile = uri
-            Toast.makeText(context, "File selected", Toast.LENGTH_SHORT).show()
-        }
+    private val selectFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        selectedUri = uri?.toString()
+        tvSelectedFile.text = selectedUri ?: "No file selected"
     }
 
-    private val selectOutputDirectoryLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        uri?.let { startWorkManagerDecryption(it) }
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        val view = inflater.inflate(R.layout.fragment_decrypt, container, false)
+
+        tvSelectedFile = view.findViewById(R.id.tv_selected_file)
+        etPassphrase = view.findViewById(R.id.et_passphrase)
+        progressBar = view.findViewById(R.id.progress_bar)
+        progressBar.max = 100
+
+        view.findViewById<Button>(R.id.btn_select_file).setOnClickListener {
+            selectFileLauncher.launch(arrayOf("image/png", "application/octet-stream"))
+        }
+
+        view.findViewById<Button>(R.id.btn_start_decrypt).setOnClickListener {
+            startDecryption()
+        }
+
+        return view
     }
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        _binding = FragmentDecryptBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-
-
-        super.onViewCreated(view, savedInstanceState)
-
-        arguments?.getParcelable<Uri>("view_uri")?.let { uri ->
-            targetFile = uri
-            Toast.makeText(context, "Shared file ready to decrypt", Toast.LENGTH_SHORT).show()
+    private fun startDecryption() {
+        if (selectedUri == null) {
+            Toast.makeText(context, "No file selected", Toast.LENGTH_SHORT).show()
+            return
         }
 
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress = 0
 
+        val outDir = File(requireContext().cacheDir, "extracted").absolutePath
 
-        parentFragmentManager.setFragmentResultListener("qr_passphrase", viewLifecycleOwner) { _, bundle ->
-            val scannedPass = bundle.getString("passphrase")
-            if (scannedPass != null) {
-                binding.etPassphrase.setText(scannedPass)
-            }
-        }
-
-        binding.btnSelectFile.setOnClickListener {
-            pickFileLauncher.launch("*/*")
-        }
-
-        binding.btnScanQr.setOnClickListener { requireActivity().supportFragmentManager.findFragmentById(R.id.nav_host_fragment)?.let { (it as androidx.navigation.fragment.NavHostFragment).navController.navigate(R.id.nav_qr) } }
-
-        binding.btnStartDecrypt.setOnClickListener {
-            if (targetFile == null) {
-                Toast.makeText(context, "Select file first", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            selectOutputDirectoryLauncher.launch(null)
-        }
-    }
-
-    private fun startWorkManagerDecryption(outputDirUri: Uri) {
-        val passphrase = binding.etPassphrase.text.toString()
-        val uri = targetFile ?: return
-
-        binding.btnStartDecrypt.isEnabled = false
-
-        val inputData = Data.Builder()
-            .putString("input_uri", uri.toString())
-            .putString("output_dir_uri", outputDirUri.toString())
-            .putString("passphrase", passphrase)
+        val data = Data.Builder()
+            .putString("INPUT_URI", selectedUri)
+            .putString("PASSPHRASE", etPassphrase.text.toString())
+            .putString("OUTPUT_DIR", outDir)
+            .putBoolean("IS_PNG", selectedUri?.contains(".png") == true || selectedUri?.contains("image") == true)
             .build()
 
-        val decodeWorkRequest = OneTimeWorkRequestBuilder<DecodeWorker>()
-            .setInputData(inputData)
+        val request = OneTimeWorkRequestBuilder<DecodeWorker>()
+            .setInputData(data)
             .build()
 
-        binding.progressBar.visibility = View.VISIBLE
-        binding.tvProgress.visibility = View.VISIBLE
+        WorkManager.getInstance(requireContext()).enqueue(request)
 
-        val workManager = WorkManager.getInstance(requireContext())
-        workManager.enqueue(decodeWorkRequest)
+        WorkManager.getInstance(requireContext()).getWorkInfoByIdLiveData(request.id).observe(viewLifecycleOwner) { info ->
+            if (info != null) {
+                val progress = info.progress.getInt("PROGRESS", 0)
+                progressBar.progress = progress
 
-        workManager.getWorkInfoByIdLiveData(decodeWorkRequest.id).observe(viewLifecycleOwner) { workInfo ->
-            if (workInfo != null) {
-                val progress = workInfo.progress.getString("progress")
-                val percent = workInfo.progress.getInt("progress_percent", -1)
-
-                if (progress != null) {
-                    binding.tvProgress.text = if (percent >= 0) "$progress ($percent%)" else progress
-                }
-
-                if (percent >= 0) {
-                    binding.progressBar.isIndeterminate = false
-                    binding.progressBar.progress = percent
-                } else {
-                    binding.progressBar.isIndeterminate = true
-                }
-
-                if (workInfo.state == WorkInfo.State.SUCCEEDED) {
-                    binding.progressBar.visibility = View.GONE
-                    binding.tvProgress.text = "Complete"
-                    Toast.makeText(context, "Decryption successful", Toast.LENGTH_SHORT).show()
-                    binding.btnStartDecrypt.isEnabled = true
-                } else if (workInfo.state == WorkInfo.State.FAILED) {
-                    binding.progressBar.visibility = View.GONE
-                    val error = workInfo.outputData.getString("error")
-                    binding.tvProgress.text = "Error: $error"
-                    Toast.makeText(context, "Decryption failed: $error", Toast.LENGTH_LONG).show()
-                    binding.btnStartDecrypt.isEnabled = true
+                if (info.state.isFinished) {
+                    progressBar.visibility = View.GONE
+                    Toast.makeText(context, "Done! Extracted to $outDir", Toast.LENGTH_LONG).show()
                 }
             }
         }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
     }
 }

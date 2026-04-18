@@ -1,33 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:background="#DDFFFFFF"
+    android:gravity="center"
     android:padding="8dp"
-    android:gravity="center">
+    android:background="#DDFFFFFF">
 
     <Button
-        android:id="@+id/widget_btn_encrypt"
+        android:id="@+id/btn_widget_encrypt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/action_encrypt"
-        android:layout_weight="1"
-        android:layout_marginEnd="4dp"/>
+        android:text="Encrypt" />
 
     <Button
-        android:id="@+id/widget_btn_decrypt"
+        android:id="@+id/btn_widget_decrypt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/action_decrypt"
-        android:layout_weight="1"
-        android:layout_marginEnd="4dp"/>
-
-    <Button
-        android:id="@+id/widget_btn_scan_qr"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/action_scan_qr"
-        android:layout_weight="1"/>
+        android:text="Decrypt" />
 
 </LinearLayout>

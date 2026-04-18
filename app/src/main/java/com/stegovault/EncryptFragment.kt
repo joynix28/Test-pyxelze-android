@@ -1,207 +1,92 @@
 package com.stegovault
 
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.net.Uri
 import android.os.Bundle
-import android.provider.OpenableColumns
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ProgressBar
+import android.widget.RadioButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
-import com.stegovault.databinding.FragmentEncryptBinding
-import kotlinx.coroutines.launch
+import java.io.File
+import java.util.UUID
 
 class EncryptFragment : Fragment() {
 
-    private var _binding: FragmentEncryptBinding? = null
-    private val binding get() = _binding!!
+    private lateinit var tvSelectedFiles: TextView
+    private lateinit var etPassphrase: EditText
+    private lateinit var rbPng: RadioButton
+    private lateinit var progressBar: ProgressBar
+    private var selectedUris: List<String> = emptyList()
 
-    private val selectedUris = mutableListOf<Uri>()
-    private var isDirectorySelected = false
-
-    private val pickFilesLauncher = registerForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            selectedUris.clear()
-            selectedUris.addAll(uris)
-            isDirectorySelected = false
-            Toast.makeText(context, "${uris.size} files selected", Toast.LENGTH_SHORT).show()
-        }
+    private val selectFilesLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        selectedUris = uris.map { it.toString() }
+        tvSelectedFiles.text = "${selectedUris.size} files selected"
     }
 
-    private val pickFolderLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            selectedUris.clear()
-            selectedUris.add(uri)
-            isDirectorySelected = true
-            Toast.makeText(context, "Folder selected", Toast.LENGTH_SHORT).show()
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        val view = inflater.inflate(R.layout.fragment_encrypt, container, false)
+
+        tvSelectedFiles = view.findViewById(R.id.tv_selected_files)
+        etPassphrase = view.findViewById(R.id.et_passphrase)
+        rbPng = view.findViewById(R.id.rb_png)
+        progressBar = view.findViewById(R.id.progress_bar)
+        progressBar.max = 100
+
+        view.findViewById<Button>(R.id.btn_select_files).setOnClickListener {
+            selectFilesLauncher.launch(arrayOf("*/*"))
         }
+
+        view.findViewById<Button>(R.id.btn_start_encrypt).setOnClickListener {
+            startEncryption()
+        }
+
+        return view
     }
 
-    private val saveFileLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("image/png")
-    ) { uri: Uri? ->
-        uri?.let { startWorkManagerEncryption(it) }
-    }
-
-    private val saveStgLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri: Uri? ->
-        uri?.let { startWorkManagerEncryption(it) }
-    }
-
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        _binding = FragmentEncryptBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-
-
-        super.onViewCreated(view, savedInstanceState)
-
-        arguments?.getParcelableArray("shared_uris")?.let { arr ->
-            selectedUris.clear()
-            arr.forEach { uri -> selectedUris.add(uri as Uri) }
-            Toast.makeText(context, "${selectedUris.size} shared files received", Toast.LENGTH_SHORT).show()
+    private fun startEncryption() {
+        if (selectedUris.isEmpty()) {
+            Toast.makeText(context, "No files selected", Toast.LENGTH_SHORT).show()
+            return
         }
 
+        progressBar.visibility = View.VISIBLE
+        progressBar.progress = 0
 
+        val isPng = rbPng.isChecked
+        val outFileName = "stego_output_${UUID.randomUUID()}" + if (isPng) ".png" else ".stg"
+        val outPath = File(requireContext().cacheDir, outFileName).absolutePath
 
-        binding.btnSelectFiles.setOnClickListener {
-            pickFilesLauncher.launch("*/*")
-        }
-
-        binding.btnSelectFolder.setOnClickListener {
-            pickFolderLauncher.launch(null)
-        }
-
-        binding.btnGenerateQr.setOnClickListener {
-            val passphrase = binding.etPassphrase.text.toString()
-            if (passphrase.isEmpty()) {
-                Toast.makeText(context, "Enter passphrase to generate QR", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            AlertDialog.Builder(requireContext())
-                .setTitle("Security Warning")
-                .setMessage("Generating a QR code with your passphrase means anyone scanning it can read it. Proceed?")
-                .setPositiveButton("Yes") { _, _ ->
-                    generateQrCode(passphrase)
-                }
-                .setNegativeButton("No", null)
-                .show()
-        }
-
-        binding.btnStartEncrypt.setOnClickListener {
-            if (selectedUris.isEmpty()) {
-                Toast.makeText(context, "Select files or folder first", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            val isStego = binding.rbStegoPng.isChecked
-            if (isStego) {
-                saveFileLauncher.launch("stego_archive.png")
-            } else {
-                saveStgLauncher.launch("archive.stg")
-            }
-        }
-    }
-
-    private fun generateQrCode(text: String) {
-        try {
-            val writer = QRCodeWriter()
-            val bitMatrix = writer.encode(text, BarcodeFormat.QR_CODE, 512, 512)
-            val width = bitMatrix.width
-            val height = bitMatrix.height
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-            for (x in 0 until width) {
-                for (y in 0 until height) {
-                    bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) Color.BLACK else Color.WHITE)
-                }
-            }
-            binding.ivQrCode.setImageBitmap(bitmap)
-            binding.ivQrCode.visibility = View.VISIBLE
-        } catch (e: Exception) {
-            Toast.makeText(context, "Failed to generate QR", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun startWorkManagerEncryption(outputUri: Uri) {
-        val passphrase = binding.etPassphrase.text.toString()
-        val isStego = binding.rbStegoPng.isChecked
-
-        binding.btnStartEncrypt.isEnabled = false
-
-        val inputData = Data.Builder()
-            .putStringArray("input_uris", selectedUris.map { it.toString() }.toTypedArray())
-            .putString("output_uri", outputUri.toString())
-            .putString("passphrase", passphrase)
-            .putBoolean("is_stego", isStego)
-            .putBoolean("is_directory", isDirectorySelected)
+        val data = Data.Builder()
+            .putStringArray("FILE_URIS", selectedUris.toTypedArray())
+            .putString("PASSPHRASE", etPassphrase.text.toString())
+            .putBoolean("IS_PNG", isPng)
+            .putString("OUTPUT_PATH", outPath)
             .build()
 
-        val encodeWorkRequest = OneTimeWorkRequestBuilder<EncodeWorker>()
-            .setInputData(inputData)
+        val request = OneTimeWorkRequestBuilder<EncodeWorker>()
+            .setInputData(data)
             .build()
 
-        binding.progressBar.visibility = View.VISIBLE
-        binding.tvProgress.visibility = View.VISIBLE
+        WorkManager.getInstance(requireContext()).enqueue(request)
 
-        val workManager = WorkManager.getInstance(requireContext())
-        workManager.enqueue(encodeWorkRequest)
+        WorkManager.getInstance(requireContext()).getWorkInfoByIdLiveData(request.id).observe(viewLifecycleOwner) { info ->
+            if (info != null) {
+                val progress = info.progress.getInt("PROGRESS", 0)
+                progressBar.progress = progress
 
-        workManager.getWorkInfoByIdLiveData(encodeWorkRequest.id).observe(viewLifecycleOwner) { workInfo ->
-            if (workInfo != null) {
-                val progress = workInfo.progress.getString("progress")
-                val percent = workInfo.progress.getInt("progress_percent", -1)
-
-                if (progress != null) {
-                    binding.tvProgress.text = if (percent >= 0) "$progress ($percent%)" else progress
-                }
-
-                if (percent >= 0) {
-                    binding.progressBar.isIndeterminate = false
-                    binding.progressBar.progress = percent
-                } else {
-                    binding.progressBar.isIndeterminate = true
-                }
-
-                if (workInfo.state == WorkInfo.State.SUCCEEDED) {
-                    binding.progressBar.visibility = View.GONE
-                    binding.tvProgress.text = "Complete"
-                    Toast.makeText(context, "Encryption successful", Toast.LENGTH_SHORT).show()
-                    binding.btnStartEncrypt.isEnabled = true
-                } else if (workInfo.state == WorkInfo.State.FAILED) {
-                    binding.progressBar.visibility = View.GONE
-                    val error = workInfo.outputData.getString("error")
-                    binding.tvProgress.text = "Error: $error"
-                    Toast.makeText(context, "Encryption failed: $error", Toast.LENGTH_LONG).show()
-                    binding.btnStartEncrypt.isEnabled = true
+                if (info.state.isFinished) {
+                    progressBar.visibility = View.GONE
+                    Toast.makeText(context, "Done! Saved to $outPath", Toast.LENGTH_LONG).show()
                 }
             }
         }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
     }
 }
