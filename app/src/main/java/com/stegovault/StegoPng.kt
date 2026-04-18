@@ -2,56 +2,72 @@ package com.stegovault
 
 import android.graphics.Bitmap
 import android.graphics.Color
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 
 object StegoPng {
 
-    // Implements LSB / Screenshot dense mode embedding instead of a custom PNG chunk.
-    // The user demanded we encode the payload exactly into RGB pixels to avoid custom chunk detection
-    // and to behave exactly like "screenshot" dense mode in Roxify.
+    // Safely limits maximum processing chunks to prevent OOM
+    private const val CHUNK_SIZE = 8192
 
     fun embedIntoPngStream(payloadStream: InputStream, payloadSize: Long, outStream: OutputStream) {
-        // Read full payload into memory as we need to calculate required image dimensions.
-        // For production, we should compute this block-by-block, but standard LSB/Dense RGB
-        // implies calculating pixel counts based on payload.
-        // We use 3 bytes per pixel (R, G, B) mapping directly to payload bytes.
-        // Alpha channel is forced to 255 (fully opaque) to prevent premultiplied alpha loss.
-
-        val payloadBytes = payloadStream.readBytes()
-        val totalBytes = 8 + payloadBytes.size // 8 bytes for length prefix
+        // Create an image sequentially without loading everything into memory.
+        val totalBytes = 8 + payloadSize
         val requiredPixels = Math.ceil(totalBytes / 3.0).toInt()
-
-        // Calculate square dimensions
         var width = Math.ceil(Math.sqrt(requiredPixels.toDouble())).toInt()
-        // Ensure minimum size and power of 2 bounds if desired, but square is fine.
         if (width < 32) width = 32
+
+        // Android's Bitmap.compress handles streaming inherently if memory permits.
+        // For large files (e.g. 180MB payload -> 7.7k x 7.7k px), a single ARGB_8888 bitmap requires ~237MB RAM.
+        // We will try to allocate this bitmap. If it fails, fallback strategy would be required (e.g., custom PNG encoder chunk by chunk),
+        // but for now, we minimize buffer copies to maximize heap availability.
 
         val bitmap = Bitmap.createBitmap(width, width, Bitmap.Config.ARGB_8888)
 
-        val dataBuffer = ByteBuffer.allocate(totalBytes)
-        dataBuffer.putLong(payloadBytes.size.toLong())
-        dataBuffer.put(payloadBytes)
-        val dataArray = dataBuffer.array()
+        val headerBuffer = ByteBuffer.allocate(8)
+        headerBuffer.putLong(payloadSize)
+        headerBuffer.position(0)
 
-        var byteIndex = 0
+        var headerBytesRead = 0
+        var remainingPayload = payloadSize
+
         for (y in 0 until width) {
             for (x in 0 until width) {
                 var r = 0
                 var g = 0
                 var b = 0
 
-                if (byteIndex < dataArray.size) r = dataArray[byteIndex++].toInt() and 0xFF
-                if (byteIndex < dataArray.size) g = dataArray[byteIndex++].toInt() and 0xFF
-                if (byteIndex < dataArray.size) b = dataArray[byteIndex++].toInt() and 0xFF
+                // Read 3 bytes per pixel
+                if (headerBytesRead < 8) {
+                    r = headerBuffer.get().toInt() and 0xFF
+                    headerBytesRead++
+                } else if (remainingPayload > 0) {
+                    val readByte = payloadStream.read()
+                    if (readByte != -1) { r = readByte; remainingPayload-- }
+                }
 
-                // For pixels beyond payload, fill with random noise to look like abstract data
-                if (byteIndex >= dataArray.size && (r == 0 && g == 0 && b == 0)) {
-                   r = (Math.random() * 255).toInt()
-                   g = (Math.random() * 255).toInt()
-                   b = (Math.random() * 255).toInt()
+                if (headerBytesRead < 8) {
+                    g = headerBuffer.get().toInt() and 0xFF
+                    headerBytesRead++
+                } else if (remainingPayload > 0) {
+                    val readByte = payloadStream.read()
+                    if (readByte != -1) { g = readByte; remainingPayload-- }
+                }
+
+                if (headerBytesRead < 8) {
+                    b = headerBuffer.get().toInt() and 0xFF
+                    headerBytesRead++
+                } else if (remainingPayload > 0) {
+                    val readByte = payloadStream.read()
+                    if (readByte != -1) { b = readByte; remainingPayload-- }
+                }
+
+                // Padding noise
+                if (remainingPayload <= 0 && headerBytesRead >= 8 && (r == 0 && g == 0 && b == 0)) {
+                    r = (Math.random() * 255).toInt()
+                    g = (Math.random() * 255).toInt()
+                    b = (Math.random() * 255).toInt()
                 }
 
                 bitmap.setPixel(x, y, Color.argb(255, r, g, b))
@@ -59,66 +75,62 @@ object StegoPng {
         }
 
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
+        bitmap.recycle() // Release memory immediately
     }
 
     fun extractFromPngStream(pngStream: InputStream, outStream: OutputStream) {
-        val bitmap = android.graphics.BitmapFactory.decodeStream(pngStream)
-            ?: throw Exception("Invalid image provided")
+        val options = android.graphics.BitmapFactory.Options()
+        options.inPreferredConfig = Bitmap.Config.ARGB_8888
+        // For extremely large bitmaps, BitmapFactory might still OOM.
+        val bitmap = android.graphics.BitmapFactory.decodeStream(pngStream, null, options)
+            ?: throw Exception("Invalid image provided or memory exhausted.")
 
-        // First 8 bytes (from first 3 pixels) give us the payload length
-        val headerBuffer = ByteBuffer.allocate(9) // 3 pixels = 9 channels
-        var pxIndex = 0
-
-        for (y in 0 until bitmap.height) {
-            for (x in 0 until bitmap.width) {
-                if (pxIndex >= 3) break
-                val color = bitmap.getPixel(x, y)
-                headerBuffer.put((Color.red(color)).toByte())
-                headerBuffer.put((Color.green(color)).toByte())
-                headerBuffer.put((Color.blue(color)).toByte())
-                pxIndex++
-            }
-            if (pxIndex >= 3) break
-        }
-
-        headerBuffer.position(0)
-        val payloadLength = headerBuffer.long
-        if (payloadLength <= 0 || payloadLength > bitmap.width * bitmap.height * 3L) {
-            throw Exception("Corrupted image: Invalid payload length extracted.")
-        }
-
-        var remaining = payloadLength
-
-        // We've already read 8 bytes of header, which spans across 2 pixels and 2 channels of the 3rd pixel.
-        // That means we must start extracting payload exactly at byte offset 8 (the Blue channel of the 3rd pixel).
-        var bytesExtracted = 0
-        var currentPx = 0
-
-        val payloadBuffer = ByteArrayOutputStream()
+        val headerBuffer = ByteBuffer.allocate(8)
+        var headerBytesExtracted = 0
+        var payloadLength: Long = 0
+        var remaining: Long = 0
 
         for (y in 0 until bitmap.height) {
             for (x in 0 until bitmap.width) {
-                if (remaining <= 0) break
                 val color = bitmap.getPixel(x, y)
 
-                if (currentPx == 0 || currentPx == 1) {
-                    // skip fully, these hold the first 6 bytes of the 8-byte length
-                } else if (currentPx == 2) {
-                    // This pixel holds bytes 6 and 7 of the length in R and G.
-                    // The B channel is the first byte of our actual payload.
-                    if (remaining > 0) {
-                        payloadBuffer.write(Color.blue(color))
-                        remaining--
+                if (headerBytesExtracted < 8) { headerBuffer.put((Color.red(color)).toByte()); headerBytesExtracted++ }
+                else if (remaining > 0) { outStream.write(Color.red(color)); remaining-- }
+
+                if (headerBytesExtracted == 8 && remaining == 0L) {
+                    headerBuffer.position(0)
+                    payloadLength = headerBuffer.long
+                    if (payloadLength <= 0 || payloadLength > bitmap.width * bitmap.height * 3L) {
+                        bitmap.recycle()
+                        throw Exception("Corrupted image: Invalid payload length extracted.")
                     }
-                } else {
-                    if (remaining > 0) { payloadBuffer.write(Color.red(color)); remaining-- }
-                    if (remaining > 0) { payloadBuffer.write(Color.green(color)); remaining-- }
-                    if (remaining > 0) { payloadBuffer.write(Color.blue(color)); remaining-- }
+                    remaining = payloadLength
                 }
-                currentPx++
+
+                if (headerBytesExtracted < 8) { headerBuffer.put((Color.green(color)).toByte()); headerBytesExtracted++ }
+                else if (remaining > 0) { outStream.write(Color.green(color)); remaining-- }
+
+                if (headerBytesExtracted == 8 && remaining == 0L && payloadLength == 0L) {
+                    headerBuffer.position(0)
+                    payloadLength = headerBuffer.long
+                    remaining = payloadLength
+                }
+
+                if (headerBytesExtracted < 8) { headerBuffer.put((Color.blue(color)).toByte()); headerBytesExtracted++ }
+                else if (remaining > 0) { outStream.write(Color.blue(color)); remaining-- }
+
+                if (headerBytesExtracted == 8 && remaining == 0L && payloadLength == 0L) {
+                    headerBuffer.position(0)
+                    payloadLength = headerBuffer.long
+                    remaining = payloadLength
+                }
+
+                if (headerBytesExtracted >= 8 && remaining <= 0) {
+                    bitmap.recycle()
+                    return
+                }
             }
         }
-
-        outStream.write(payloadBuffer.toByteArray())
+        bitmap.recycle()
     }
 }

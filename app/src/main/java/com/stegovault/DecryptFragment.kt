@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,18 +13,26 @@ import androidx.fragment.app.Fragment
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import java.io.File
+import com.google.android.material.progressindicator.CircularProgressIndicator
 
 class DecryptFragment : Fragment() {
 
     private lateinit var tvSelectedFile: TextView
     private lateinit var etPassphrase: EditText
-    private lateinit var progressBar: ProgressBar
+    private lateinit var progressBar: CircularProgressIndicator
     private var selectedUri: String? = null
 
     private val selectFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         selectedUri = uri?.toString()
-        tvSelectedFile.text = selectedUri ?: "No file selected"
+        tvSelectedFile.text = if (selectedUri != null) "File selected" else "No file selected"
+    }
+
+    private val selectOutputFolderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            executeDecryption(uri.toString())
+        } else {
+            Toast.makeText(context, "Extraction cancelled", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -37,7 +44,7 @@ class DecryptFragment : Fragment() {
         progressBar.max = 100
 
         view.findViewById<Button>(R.id.btn_select_file).setOnClickListener {
-            selectFileLauncher.launch(arrayOf("image/png", "application/octet-stream"))
+            selectFileLauncher.launch(arrayOf("image/png", "application/octet-stream", "*/*"))
         }
 
         view.findViewById<Button>(R.id.btn_start_decrypt).setOnClickListener {
@@ -53,16 +60,18 @@ class DecryptFragment : Fragment() {
             return
         }
 
+        // Prompt user for output directory using SAF DocumentTree
+        selectOutputFolderLauncher.launch(null)
+    }
+
+    private fun executeDecryption(outDirUri: String) {
         progressBar.visibility = View.VISIBLE
         progressBar.progress = 0
-
-        val outDir = File(requireContext().cacheDir, "extracted").absolutePath
 
         val data = Data.Builder()
             .putString("INPUT_URI", selectedUri)
             .putString("PASSPHRASE", etPassphrase.text.toString())
-            .putString("OUTPUT_DIR", outDir)
-            .putBoolean("IS_PNG", selectedUri?.contains(".png") == true || selectedUri?.contains("image") == true)
+            .putString("OUTPUT_TREE_URI", outDirUri)
             .build()
 
         val request = OneTimeWorkRequestBuilder<DecodeWorker>()
@@ -74,11 +83,14 @@ class DecryptFragment : Fragment() {
         WorkManager.getInstance(requireContext()).getWorkInfoByIdLiveData(request.id).observe(viewLifecycleOwner) { info ->
             if (info != null) {
                 val progress = info.progress.getInt("PROGRESS", 0)
-                progressBar.progress = progress
+                if (progress > 0) {
+                    progressBar.isIndeterminate = false
+                    progressBar.progress = progress
+                }
 
                 if (info.state.isFinished) {
                     progressBar.visibility = View.GONE
-                    Toast.makeText(context, "Done! Extracted to $outDir", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Done! Files extracted to folder.", Toast.LENGTH_LONG).show()
                 }
             }
         }

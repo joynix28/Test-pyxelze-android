@@ -1,52 +1,91 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="24dp"
+    android:background="#121212">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/action_decrypt"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
+        android:textColor="#FFFFFF"
+        android:textSize="28sp"
+        android:fontFamily="sans-serif-medium"
+        android:layout_marginBottom="24dp"/>
 
-    <Button
-        android:id="@+id/btn_select_file"
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Select PNG/Archive"
-        android:layout_marginBottom="16dp"/>
+        app:cardBackgroundColor="#1E1E1E"
+        app:cardCornerRadius="16dp"
+        app:strokeWidth="0dp"
+        android:layout_marginBottom="16dp">
 
-    <TextView
-        android:id="@+id/tv_selected_file"
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_select_file"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Select PNG/Archive"
+                app:cornerRadius="8dp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tv_selected_file"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No file selected"
+                android:textColor="#BDBDBD"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:maxLines="1"
+                android:ellipsize="middle"/>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="No file selected"
-        android:layout_marginBottom="16dp"/>
+        android:layout_marginBottom="24dp"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/et_passphrase"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/label_passphrase"
+            android:inputType="textPassword"
+            android:textColor="#FFFFFF"/>
+    </com.google.android.material.textfield.TextInputLayout>
 
-    <EditText
-        android:id="@+id/et_passphrase"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="@string/label_passphrase"
-        android:inputType="textPassword"
-        android:layout_marginBottom="16dp"/>
-
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_start_decrypt"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Start Decryption"
-        android:layout_marginBottom="16dp"/>
+        android:layout_height="64dp"
+        android:text="Start Decryption &amp; Select Folder"
+        app:cornerRadius="16dp"
+        android:textSize="16sp"
+        android:layout_marginBottom="24dp"/>
 
-    <ProgressBar
-        android:id="@+id/progress_bar"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:visibility="gone"/>
+        android:layout_height="wrap_content">
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/progress_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminate="true"
+            app:indicatorColor="?attr/colorPrimary"
+            android:visibility="gone"/>
+    </FrameLayout>
 
 </LinearLayout>
