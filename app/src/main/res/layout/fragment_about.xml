@@ -33,6 +33,22 @@
         android:text="Made by JoyniX"
         android:textSize="18sp"
         android:textStyle="italic"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="https://joynix.fr"
+        android:autoLink="web"
+        android:textSize="16sp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="contact@chell.fr"
+        android:autoLink="email"
+        android:textSize="16sp"
         android:layout_marginBottom="32dp" />
 
     <TextView

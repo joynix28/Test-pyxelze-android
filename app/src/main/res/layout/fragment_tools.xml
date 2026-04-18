@@ -35,37 +35,10 @@
         android:layout_marginBottom="12dp"/>
 
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_tool_notes"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:text="Stego Notes &amp; Keychain"
-        app:cornerRadius="12dp"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        android:layout_marginBottom="12dp"/>
-
-    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_tool_qr"
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:text="Offline QR Session"
-        app:cornerRadius="12dp"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        android:layout_marginBottom="12dp"/>
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_tool_roxify"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:text="Roxify Bridge &amp; Command Helper"
-        app:cornerRadius="12dp"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        android:layout_marginBottom="12dp"/>
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_tool_forensics"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:text="Stego Scanner &amp; Forensics"
         app:cornerRadius="12dp"
         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:layout_marginBottom="12dp"/>

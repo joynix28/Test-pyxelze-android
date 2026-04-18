@@ -11,16 +11,6 @@ import java.nio.charset.StandardCharsets
 
 object StegoEngine {
 
-    // This implements the actual binary format required for Pyxelze/Roxify interoperability.
-    // Spec:
-    // Magic 4 bytes: 'ROX1'
-    // Format Version: 1 byte (0x01)
-    // Flags: 1 byte (bit 0 = encrypted, bit 1 = is_screenshot_mode)
-    // Salt: 16 bytes
-    // Nonce: 12 bytes
-    // Payload Size: 8 bytes (little endian)
-    // Then raw zstd compressed (and optionally AES encrypted) data follows.
-
     const val MAGIC = "ROX1"
 
     fun buildPayload(
@@ -33,12 +23,10 @@ object StegoEngine {
         val tempCompressedFile = File.createTempFile("temp_zstd", ".zstd")
 
         try {
-            // 1. Create TAR archive using Commons Compress
             FileOutputStream(tempTarFile).use { tarOut ->
                 ArchiveManager.createTarArchive(files, tarOut)
             }
 
-            // 2. Compress with Zstd
             FileInputStream(tempTarFile).use { tarIn ->
                 FileOutputStream(tempCompressedFile).use { zstdOut ->
                     val compressedOut = com.github.luben.zstd.ZstdOutputStream(zstdOut)
@@ -47,7 +35,6 @@ object StegoEngine {
                 }
             }
 
-            // 3. Encrypt payload & build exact header
             val salt = if (!passphrase.isNullOrEmpty()) CryptoEngine.generateSalt() else ByteArray(16)
             val nonce = if (!passphrase.isNullOrEmpty()) CryptoEngine.generateNonce() else ByteArray(12)
 
@@ -59,8 +46,7 @@ object StegoEngine {
 
             var flags: Byte = 0
             if (!passphrase.isNullOrEmpty()) flags = (flags.toInt() or 0x01).toByte()
-            // If it's PNG, we use screenshot/LSB mode. Assuming bit 1 represents this in Roxify specs based on user feedback.
-            if (isStegoPng) flags = (flags.toInt() or 0x02).toByte()
+            // Using compact chunk mode instead of LSB for safety with large payloads
             headerBuffer.put(flags)
 
             headerBuffer.put(salt)
@@ -84,6 +70,9 @@ object StegoEngine {
                     zstdIn.copyTo(outputStream)
                 }
             }
+
+            // Ensure streams are fully written
+            outputStream.flush()
         } finally {
             tempTarFile.delete()
             tempCompressedFile.delete()
@@ -96,8 +85,8 @@ object StegoEngine {
         outputDir: File
     ) {
         val magicBytes = ByteArray(4)
-        inputStream.read(magicBytes)
-        if (String(magicBytes, StandardCharsets.US_ASCII) != MAGIC) throw Exception("Invalid magic, not a Roxify/StegoVault file.")
+        var readCount = inputStream.read(magicBytes)
+        if (readCount < 4 || String(magicBytes, StandardCharsets.US_ASCII) != MAGIC) throw Exception("Invalid magic, not a Roxify/StegoVault file.")
 
         val version = inputStream.read().toByte()
         val flags = inputStream.read().toByte()

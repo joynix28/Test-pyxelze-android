@@ -1,136 +1,121 @@
 package com.stegovault
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
+import java.util.zip.CRC32
+import kotlin.random.Random
 
 object StegoPng {
 
-    // Safely limits maximum processing chunks to prevent OOM
-    private const val CHUNK_SIZE = 8192
+    private const val CHUNK_TYPE = "rXDT"
 
     fun embedIntoPngStream(payloadStream: InputStream, payloadSize: Long, outStream: OutputStream) {
-        // Create an image sequentially without loading everything into memory.
-        val totalBytes = 8 + payloadSize
-        val requiredPixels = Math.ceil(totalBytes / 3.0).toInt()
-        var width = Math.ceil(Math.sqrt(requiredPixels.toDouble())).toInt()
-        if (width < 32) width = 32
+        // Base cover image generator (does NOT hold payload in pixels to avoid OOM on large files).
+        // It creates a fixed 256x256 image and appends the payload correctly into an rXDT chunk.
 
-        // Android's Bitmap.compress handles streaming inherently if memory permits.
-        // For large files (e.g. 180MB payload -> 7.7k x 7.7k px), a single ARGB_8888 bitmap requires ~237MB RAM.
-        // We will try to allocate this bitmap. If it fails, fallback strategy would be required (e.g., custom PNG encoder chunk by chunk),
-        // but for now, we minimize buffer copies to maximize heap availability.
-
-        val bitmap = Bitmap.createBitmap(width, width, Bitmap.Config.ARGB_8888)
-
-        val headerBuffer = ByteBuffer.allocate(8)
-        headerBuffer.putLong(payloadSize)
-        headerBuffer.position(0)
-
-        var headerBytesRead = 0
-        var remainingPayload = payloadSize
-
-        for (y in 0 until width) {
-            for (x in 0 until width) {
-                var r = 0
-                var g = 0
-                var b = 0
-
-                // Read 3 bytes per pixel
-                if (headerBytesRead < 8) {
-                    r = headerBuffer.get().toInt() and 0xFF
-                    headerBytesRead++
-                } else if (remainingPayload > 0) {
-                    val readByte = payloadStream.read()
-                    if (readByte != -1) { r = readByte; remainingPayload-- }
-                }
-
-                if (headerBytesRead < 8) {
-                    g = headerBuffer.get().toInt() and 0xFF
-                    headerBytesRead++
-                } else if (remainingPayload > 0) {
-                    val readByte = payloadStream.read()
-                    if (readByte != -1) { g = readByte; remainingPayload-- }
-                }
-
-                if (headerBytesRead < 8) {
-                    b = headerBuffer.get().toInt() and 0xFF
-                    headerBytesRead++
-                } else if (remainingPayload > 0) {
-                    val readByte = payloadStream.read()
-                    if (readByte != -1) { b = readByte; remainingPayload-- }
-                }
-
-                // Padding noise
-                if (remainingPayload <= 0 && headerBytesRead >= 8 && (r == 0 && g == 0 && b == 0)) {
-                    r = (Math.random() * 255).toInt()
-                    g = (Math.random() * 255).toInt()
-                    b = (Math.random() * 255).toInt()
-                }
-
-                bitmap.setPixel(x, y, Color.argb(255, r, g, b))
+        val bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val r = Random.Default
+        for (x in 0 until 256 step 16) {
+            for (y in 0 until 256 step 16) {
+                val color = Color.rgb(r.nextInt(256), r.nextInt(256), r.nextInt(256))
+                val paint = Paint().apply { this.color = color }
+                canvas.drawRect(x.toFloat(), y.toFloat(), (x + 16).toFloat(), (y + 16).toFloat(), paint)
             }
         }
 
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
-        bitmap.recycle() // Release memory immediately
+        val imageStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, imageStream)
+        val pngBytes = imageStream.toByteArray()
+        bitmap.recycle()
+
+        val buffer = ByteBuffer.wrap(pngBytes)
+
+        // Write PNG signature
+        val signature = ByteArray(8)
+        buffer.get(signature)
+        outStream.write(signature)
+
+        var chunkInjected = false
+
+        while (buffer.remaining() >= 8) {
+            val length = buffer.int
+            val typeBytes = ByteArray(4)
+            buffer.get(typeBytes)
+            val type = String(typeBytes)
+
+            val data = ByteArray(length)
+            if (length > 0) {
+                buffer.get(data)
+            }
+            val crc = buffer.int
+
+            outStream.write(ByteBuffer.allocate(4).putInt(length).array())
+            outStream.write(typeBytes)
+            outStream.write(data)
+            outStream.write(ByteBuffer.allocate(4).putInt(crc).array())
+
+            // Inject after IHDR
+            if (type == "IHDR" && !chunkInjected) {
+                val chunkTypeBytes = CHUNK_TYPE.toByteArray(Charsets.US_ASCII)
+                val crc32 = CRC32()
+                crc32.update(chunkTypeBytes)
+
+                outStream.write(ByteBuffer.allocate(4).putInt(payloadSize.toInt()).array())
+                outStream.write(chunkTypeBytes)
+
+                val bufferSize = 8192
+                val chunkBuffer = ByteArray(bufferSize)
+                var bytesRead: Int
+                while (payloadStream.read(chunkBuffer).also { bytesRead = it } != -1) {
+                    outStream.write(chunkBuffer, 0, bytesRead)
+                    crc32.update(chunkBuffer, 0, bytesRead)
+                }
+
+                outStream.write(ByteBuffer.allocate(4).putInt(crc32.value.toInt()).array())
+                chunkInjected = true
+            }
+        }
+
+        outStream.flush()
     }
 
     fun extractFromPngStream(pngStream: InputStream, outStream: OutputStream) {
-        val options = android.graphics.BitmapFactory.Options()
-        options.inPreferredConfig = Bitmap.Config.ARGB_8888
-        // For extremely large bitmaps, BitmapFactory might still OOM.
-        val bitmap = android.graphics.BitmapFactory.decodeStream(pngStream, null, options)
-            ?: throw Exception("Invalid image provided or memory exhausted.")
+        val signature = ByteArray(8)
+        pngStream.read(signature)
 
-        val headerBuffer = ByteBuffer.allocate(8)
-        var headerBytesExtracted = 0
-        var payloadLength: Long = 0
-        var remaining: Long = 0
+        while (true) {
+            val lengthBytes = ByteArray(4)
+            if (pngStream.read(lengthBytes) < 4) break
+            val length = ByteBuffer.wrap(lengthBytes).int
 
-        for (y in 0 until bitmap.height) {
-            for (x in 0 until bitmap.width) {
-                val color = bitmap.getPixel(x, y)
+            val typeBytes = ByteArray(4)
+            pngStream.read(typeBytes)
+            val type = String(typeBytes)
 
-                if (headerBytesExtracted < 8) { headerBuffer.put((Color.red(color)).toByte()); headerBytesExtracted++ }
-                else if (remaining > 0) { outStream.write(Color.red(color)); remaining-- }
-
-                if (headerBytesExtracted == 8 && remaining == 0L) {
-                    headerBuffer.position(0)
-                    payloadLength = headerBuffer.long
-                    if (payloadLength <= 0 || payloadLength > bitmap.width * bitmap.height * 3L) {
-                        bitmap.recycle()
-                        throw Exception("Corrupted image: Invalid payload length extracted.")
-                    }
-                    remaining = payloadLength
+            if (type == CHUNK_TYPE) {
+                val bufferSize = 8192
+                val chunkBuffer = ByteArray(bufferSize)
+                var remaining = length
+                while (remaining > 0) {
+                    val toRead = if (remaining > bufferSize) bufferSize else remaining
+                    val bytesRead = pngStream.read(chunkBuffer, 0, toRead)
+                    if (bytesRead == -1) break
+                    outStream.write(chunkBuffer, 0, bytesRead)
+                    remaining -= bytesRead
                 }
-
-                if (headerBytesExtracted < 8) { headerBuffer.put((Color.green(color)).toByte()); headerBytesExtracted++ }
-                else if (remaining > 0) { outStream.write(Color.green(color)); remaining-- }
-
-                if (headerBytesExtracted == 8 && remaining == 0L && payloadLength == 0L) {
-                    headerBuffer.position(0)
-                    payloadLength = headerBuffer.long
-                    remaining = payloadLength
-                }
-
-                if (headerBytesExtracted < 8) { headerBuffer.put((Color.blue(color)).toByte()); headerBytesExtracted++ }
-                else if (remaining > 0) { outStream.write(Color.blue(color)); remaining-- }
-
-                if (headerBytesExtracted == 8 && remaining == 0L && payloadLength == 0L) {
-                    headerBuffer.position(0)
-                    payloadLength = headerBuffer.long
-                    remaining = payloadLength
-                }
-
-                if (headerBytesExtracted >= 8 && remaining <= 0) {
-                    bitmap.recycle()
-                    return
-                }
+                outStream.flush()
+                return // Done extracting
+            } else {
+                pngStream.skip(length.toLong() + 4)
             }
         }
-        bitmap.recycle()
+        throw Exception("Chunk $CHUNK_TYPE not found in PNG")
     }
 }

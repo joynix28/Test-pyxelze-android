@@ -71,7 +71,7 @@ class EncodeWorker(context: Context, params: WorkerParameters) : Worker(context,
             val fileUris = inputData.getStringArray("FILE_URIS") ?: return Result.failure()
             val passphrase = inputData.getString("PASSPHRASE")
             val isPng = inputData.getBoolean("IS_PNG", true)
-            val outputUriStr = inputData.getString("OUTPUT_URI") ?: return Result.failure()
+            val outputPathStr = inputData.getString("OUTPUT_PATH") ?: return Result.failure()
 
             val tempFiles = mutableListOf<File>()
             val contentResolver = applicationContext.contentResolver
@@ -88,20 +88,17 @@ class EncodeWorker(context: Context, params: WorkerParameters) : Worker(context,
                 tempFiles.add(tempFile)
             }
 
-            val outUri = Uri.parse(outputUriStr)
-            val outputStream = contentResolver.openOutputStream(outUri) ?: throw Exception("Cannot open output stream")
+            val outputFile = File(outputPathStr)
+            val outputStream = FileOutputStream(outputFile)
 
             if (isPng) {
-                // First pass: Build payload to temp file
                 val tempPayload = File.createTempFile("temp_payload", ".dat", applicationContext.cacheDir)
                 FileOutputStream(tempPayload).use { out ->
                     StegoEngine.buildPayload(tempFiles, passphrase, isPng, out)
                 }
 
-                // Second pass: Embed stream with accurate progress
                 val payloadSize = tempPayload.length()
                 val progressStream = ProgressInputStream(FileInputStream(tempPayload), payloadSize) { percent ->
-                    // Mapping 0-100 of embedding to 50-100 of overall
                     setProgressAsync(workDataOf("PROGRESS" to (50 + (percent / 2))))
                 }
 
@@ -133,11 +130,11 @@ class DecodeWorker(context: Context, params: WorkerParameters) : Worker(context,
         return try {
             val inputUriStr = inputData.getString("INPUT_URI") ?: return Result.failure()
             val passphrase = inputData.getString("PASSPHRASE")
-            val outputTreeUriStr = inputData.getString("OUTPUT_TREE_URI") ?: return Result.failure()
+            val outputPathStr = inputData.getString("OUTPUT_PATH") ?: return Result.failure()
             val isPng = inputData.getBoolean("IS_PNG", true)
 
             val uri = Uri.parse(inputUriStr)
-            val outTreeUri = Uri.parse(outputTreeUriStr)
+            val outputDir = File(outputPathStr)
 
             val contentResolver = applicationContext.contentResolver
 
@@ -149,8 +146,7 @@ class DecodeWorker(context: Context, params: WorkerParameters) : Worker(context,
                 setProgressAsync(workDataOf("PROGRESS" to percent))
             }
 
-            val tempExtractDir = File(applicationContext.cacheDir, "extracted_${System.currentTimeMillis()}")
-            tempExtractDir.mkdirs()
+            outputDir.mkdirs()
 
             if (isPng) {
                 val tempPayload = File.createTempFile("temp_payload_dec", ".dat", applicationContext.cacheDir)
@@ -158,46 +154,20 @@ class DecodeWorker(context: Context, params: WorkerParameters) : Worker(context,
                     StegoPng.extractFromPngStream(progressStream, out)
                 }
                 FileInputStream(tempPayload).use { input ->
-                    StegoEngine.extractPayload(input, passphrase, tempExtractDir)
+                    StegoEngine.extractPayload(input, passphrase, outputDir)
                 }
                 tempPayload.delete()
             } else {
-                StegoEngine.extractPayload(progressStream, passphrase, tempExtractDir)
+                StegoEngine.extractPayload(progressStream, passphrase, outputDir)
             }
 
             progressStream.close()
-
-            val docTree = DocumentFile.fromTreeUri(applicationContext, outTreeUri)
-                ?: throw Exception("Cannot access output directory")
-
-            copyToDocumentTree(tempExtractDir, docTree)
-            tempExtractDir.deleteRecursively()
 
             setProgressAsync(workDataOf("PROGRESS" to 100))
             Result.success()
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure()
-        }
-    }
-
-    private fun copyToDocumentTree(sourceFile: File, targetDir: DocumentFile) {
-        val contentResolver = applicationContext.contentResolver
-        if (sourceFile.isDirectory) {
-            val children = sourceFile.listFiles() ?: return
-            for (child in children) {
-                if (child.isDirectory) {
-                    val newDir = targetDir.createDirectory(child.name) ?: continue
-                    copyToDocumentTree(child, newDir)
-                } else {
-                    val newFile = targetDir.createFile("application/octet-stream", child.name) ?: continue
-                    contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                        FileInputStream(child).use { input ->
-                            input.copyTo(out)
-                        }
-                    }
-                }
-            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.stegovault
 
 import android.os.Bundle
+import android.os.Environment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,12 +10,17 @@ import android.widget.EditText
 import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.material.progressindicator.CircularProgressIndicator
+import java.io.File
 import java.util.UUID
 
 class EncryptFragment : Fragment() {
@@ -30,11 +36,11 @@ class EncryptFragment : Fragment() {
         tvSelectedFiles.text = "${selectedUris.size} files selected"
     }
 
-    private val saveFileLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
-        if (uri != null) {
-            executeEncryption(uri.toString())
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            proceedWithEncryption()
         } else {
-            Toast.makeText(context, "Encryption cancelled", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Storage permission required", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -64,16 +70,30 @@ class EncryptFragment : Fragment() {
             return
         }
 
-        val isPng = rbPng.isChecked
-        val defaultName = "StegoVault_${UUID.randomUUID().toString().substring(0,8)}" + if (isPng) ".png" else ".stg"
-        val mimeType = if (isPng) "image/png" else "application/octet-stream"
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                return
+            }
+        }
 
-        // Use reflection workaround if CreateDocument does not support dynamic mimetype easily, but standard behavior allows overriding.
-        // For simplicity, we just prompt the user where to save the file.
-        saveFileLauncher.launch(defaultName)
+        proceedWithEncryption()
     }
 
-    private fun executeEncryption(outUri: String) {
+    private fun proceedWithEncryption() {
+        val isPng = rbPng.isChecked
+        val defaultName = "StegoVault_${UUID.randomUUID().toString().substring(0,8)}" + if (isPng) ".png" else ".stg"
+
+        // Output directly to standard Downloads folder to bypass slow SAF prompt loop
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val stegoDir = File(downloadsDir, "StegoVault")
+        if (!stegoDir.exists()) stegoDir.mkdirs()
+
+        val outFile = File(stegoDir, defaultName)
+        executeEncryption(outFile.absolutePath)
+    }
+
+    private fun executeEncryption(outPath: String) {
         progressBar.visibility = View.VISIBLE
         progressBar.progress = 0
 
@@ -83,7 +103,7 @@ class EncryptFragment : Fragment() {
             .putStringArray("FILE_URIS", selectedUris.toTypedArray())
             .putString("PASSPHRASE", etPassphrase.text.toString())
             .putBoolean("IS_PNG", isPng)
-            .putString("OUTPUT_URI", outUri)
+            .putString("OUTPUT_PATH", outPath)
             .build()
 
         val request = OneTimeWorkRequestBuilder<EncodeWorker>()
@@ -100,9 +120,12 @@ class EncryptFragment : Fragment() {
                     progressBar.progress = progress
                 }
 
-                if (info.state.isFinished) {
+                if (info.state == androidx.work.WorkInfo.State.SUCCEEDED) {
                     progressBar.visibility = View.GONE
-                    Toast.makeText(context, "Done! File saved.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Done! Saved to Downloads/StegoVault", Toast.LENGTH_LONG).show()
+                } else if (info.state == androidx.work.WorkInfo.State.FAILED) {
+                    progressBar.visibility = View.GONE
+                    Toast.makeText(context, "Encryption failed. Ensure files are valid and space is available.", Toast.LENGTH_LONG).show()
                 }
             }
         }
