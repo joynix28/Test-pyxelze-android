@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ProgressBar
 import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
@@ -15,7 +14,7 @@ import androidx.fragment.app.Fragment
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import java.io.File
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import java.util.UUID
 
 class EncryptFragment : Fragment() {
@@ -23,12 +22,20 @@ class EncryptFragment : Fragment() {
     private lateinit var tvSelectedFiles: TextView
     private lateinit var etPassphrase: EditText
     private lateinit var rbPng: RadioButton
-    private lateinit var progressBar: ProgressBar
+    private lateinit var progressBar: CircularProgressIndicator
     private var selectedUris: List<String> = emptyList()
 
     private val selectFilesLauncher = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         selectedUris = uris.map { it.toString() }
         tvSelectedFiles.text = "${selectedUris.size} files selected"
+    }
+
+    private val saveFileLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
+        if (uri != null) {
+            executeEncryption(uri.toString())
+        } else {
+            Toast.makeText(context, "Encryption cancelled", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -57,18 +64,26 @@ class EncryptFragment : Fragment() {
             return
         }
 
+        val isPng = rbPng.isChecked
+        val defaultName = "StegoVault_${UUID.randomUUID().toString().substring(0,8)}" + if (isPng) ".png" else ".stg"
+        val mimeType = if (isPng) "image/png" else "application/octet-stream"
+
+        // Use reflection workaround if CreateDocument does not support dynamic mimetype easily, but standard behavior allows overriding.
+        // For simplicity, we just prompt the user where to save the file.
+        saveFileLauncher.launch(defaultName)
+    }
+
+    private fun executeEncryption(outUri: String) {
         progressBar.visibility = View.VISIBLE
         progressBar.progress = 0
 
         val isPng = rbPng.isChecked
-        val outFileName = "stego_output_${UUID.randomUUID()}" + if (isPng) ".png" else ".stg"
-        val outPath = File(requireContext().cacheDir, outFileName).absolutePath
 
         val data = Data.Builder()
             .putStringArray("FILE_URIS", selectedUris.toTypedArray())
             .putString("PASSPHRASE", etPassphrase.text.toString())
             .putBoolean("IS_PNG", isPng)
-            .putString("OUTPUT_PATH", outPath)
+            .putString("OUTPUT_URI", outUri)
             .build()
 
         val request = OneTimeWorkRequestBuilder<EncodeWorker>()
@@ -80,11 +95,14 @@ class EncryptFragment : Fragment() {
         WorkManager.getInstance(requireContext()).getWorkInfoByIdLiveData(request.id).observe(viewLifecycleOwner) { info ->
             if (info != null) {
                 val progress = info.progress.getInt("PROGRESS", 0)
-                progressBar.progress = progress
+                if (progress > 0) {
+                    progressBar.isIndeterminate = false
+                    progressBar.progress = progress
+                }
 
                 if (info.state.isFinished) {
                     progressBar.visibility = View.GONE
-                    Toast.makeText(context, "Done! Saved to $outPath", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Done! File saved.", Toast.LENGTH_LONG).show()
                 }
             }
         }

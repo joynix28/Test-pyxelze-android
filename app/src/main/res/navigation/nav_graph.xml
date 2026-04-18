@@ -25,7 +25,14 @@
         android:id="@+id/navigation_tools"
         android:name="com.stegovault.ToolsFragment"
         android:label="Tools"
-        tools:layout="@layout/fragment_tools" />
+        tools:layout="@layout/fragment_tools">
+        <action
+            android:id="@+id/action_tools_to_encrypt"
+            app:destination="@id/navigation_encrypt" />
+        <action
+            android:id="@+id/action_tools_to_scanner"
+            app:destination="@id/navigation_scanner" />
+    </fragment>
 
     <fragment
         android:id="@+id/navigation_encrypt"

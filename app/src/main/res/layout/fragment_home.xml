@@ -1,45 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:gravity="center"
     android:orientation="vertical"
-    android:padding="32dp">
+    android:padding="32dp"
+    android:background="#121212">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_marginBottom="24dp"
+        app:cardCornerRadius="60dp"
+        app:cardElevation="8dp"
+        app:strokeWidth="0dp">
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_launcher"
+            android:scaleType="centerCrop"
+            android:background="#26A69A"/>
+    </com.google.android.material.card.MaterialCardView>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/app_name"
-        android:textSize="32sp"
-        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:textSize="36sp"
+        android:fontFamily="sans-serif-medium"
         android:layout_marginBottom="8dp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Made by JoyniX"
+        android:textColor="#BDBDBD"
         android:textSize="16sp"
-        android:textStyle="italic"
+        android:fontFamily="sans-serif-light"
+        android:letterSpacing="0.1"
         android:layout_marginBottom="48dp" />
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_encrypt"
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:text="@string/action_encrypt"
+        app:cornerRadius="16dp"
+        android:textSize="16sp"
+        app:iconGravity="textStart"
         android:layout_marginBottom="16dp" />
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_decrypt"
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:text="@string/action_decrypt"
+        app:cornerRadius="16dp"
+        android:textSize="16sp"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:layout_marginBottom="16dp" />
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_scan"
         android:layout_width="match_parent"
         android:layout_height="64dp"
-        android:text="@string/action_scan_qr" />
+        android:text="@string/action_scan_qr"
+        app:cornerRadius="16dp"
+        android:textSize="16sp"
+        style="@style/Widget.MaterialComponents.Button.TextButton" />
 
 </LinearLayout>
