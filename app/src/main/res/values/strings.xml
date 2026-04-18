@@ -1,25 +1,20 @@
 <resources>
-    <string name="app_name">StegoVault by JoyniX</string>
-    <string name="action_encrypt">Encode</string>
-    <string name="action_decrypt">Decode</string>
+    <string name="app_name">StegoVault</string>
+    <string name="title_home">Home</string>
+    <string name="title_vault">Vault</string>
+    <string name="title_scanner">Scanner</string>
+    <string name="title_settings">Settings</string>
+
+    <string name="action_encrypt">Encrypt &amp; Embed</string>
+    <string name="action_decrypt">Decrypt &amp; Extract</string>
     <string name="action_scan_qr">Scan QR Code</string>
-    <string name="action_settings">Settings</string>
-    <string name="action_select_files">Select Files</string>
-    <string name="action_select_folder">Select Folder</string>
-    <string name="action_select_file">Select File</string>
-    <string name="action_generate_qr">QR</string>
+
     <string name="label_passphrase">Passphrase</string>
     <string name="label_language">Language</string>
-    <string name="mode_stego_png">Stego PNG</string>
-    <string name="mode_encrypted_archive">Encrypted Archive (.stg)</string>
-    <string name="nav_home">Home</string>
-    <string name="nav_vault">Vault</string>
-    <string name="nav_tools">Tools</string>
-    <string name="nav_settings">Settings</string>
-    <string name="about_title">About &amp; Legal</string>
-    <string name="about_author">Made by JoyniX</string>
-    <string name="about_website">Website: https://joynix.fr</string>
-    <string name="about_contact">Contact: contact@chell.fr</string>
-    <string name="about_license">License: Apache 2.0. This is a free and open source application.</string>
-    <string name="about_credits">Original concepts inspired by Roxify (https://github.com/RoxasYTB/roxify) and Pyxelze.</string>
+    <string name="label_select_files">Select Files</string>
+    <string name="label_stego_png">Embed in PNG</string>
+    <string name="label_stego_archive">Standard Archive (.stg)</string>
+    <string name="status_processing">Processing...</string>
+    <string name="status_success">Success!</string>
+    <string name="status_error">Error occurred.</string>
 </resources>

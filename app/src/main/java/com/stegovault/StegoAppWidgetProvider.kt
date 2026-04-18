@@ -8,41 +8,28 @@ import android.content.Intent
 import android.widget.RemoteViews
 
 class StegoAppWidgetProvider : AppWidgetProvider() {
-
-    override fun onUpdate(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray
-    ) {
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {
-            updateAppWidget(context, appWidgetManager, appWidgetId)
+            val views = RemoteViews(context.packageName, R.layout.widget_stego)
+
+            // Setup intents to launch app
+            val encryptIntent = Intent(context, MainActivity::class.java).apply {
+                action = "ACTION_ENCRYPT"
+            }
+            val encryptPendingIntent = PendingIntent.getActivity(
+                context, 0, encryptIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.btn_widget_encrypt, encryptPendingIntent)
+
+            val decryptIntent = Intent(context, MainActivity::class.java).apply {
+                action = "ACTION_DECRYPT"
+            }
+            val decryptPendingIntent = PendingIntent.getActivity(
+                context, 1, decryptIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.btn_widget_decrypt, decryptPendingIntent)
+
+            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
-    }
-
-    private fun updateAppWidget(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetId: Int
-    ) {
-        val views = RemoteViews(context.packageName, R.layout.widget_stego)
-
-        views.setOnClickPendingIntent(R.id.widget_btn_encrypt, getPendingIntent(context, "vault"))
-        views.setOnClickPendingIntent(R.id.widget_btn_decrypt, getPendingIntent(context, "vault"))
-        views.setOnClickPendingIntent(R.id.widget_btn_scan_qr, getPendingIntent(context, "scan_qr"))
-
-        appWidgetManager.updateAppWidget(appWidgetId, views)
-    }
-
-    private fun getPendingIntent(context: Context, destination: String): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            putExtra("destination", destination)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        return PendingIntent.getActivity(
-            context,
-            destination.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
     }
 }

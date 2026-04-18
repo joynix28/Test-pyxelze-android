@@ -1,75 +1,44 @@
 package com.stegovault
 
-import java.io.InputStream
-import java.io.OutputStream
 import java.security.SecureRandom
 import javax.crypto.Cipher
-import javax.crypto.CipherInputStream
-import javax.crypto.CipherOutputStream
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
-/**
- * Handles AES-256-GCM encryption and PBKDF2-HMAC-SHA256 key derivation via streaming.
- * Made by JoyniX.
- */
 object CryptoEngine {
-    private const val ALGORITHM = "AES/GCM/NoPadding"
-    private const val GCM_TAG_LENGTH = 128 // 16 bytes
-    private const val KEY_LENGTH = 256 // 32 bytes
+    private const val ALGORITHM = "AES"
+    private const val CIPHER_MODE = "AES/GCM/NoPadding"
+    private const val KDF_ALGORITHM = "PBKDF2WithHmacSHA256"
+    private const val ITERATIONS = 100_000
+    private const val KEY_LENGTH = 256
+    private const val SALT_LENGTH = 16
+    private const val NONCE_LENGTH = 12
+    private const val TAG_LENGTH = 128
 
-    fun generateSalt(): ByteArray = ByteArray(16).apply { SecureRandom().nextBytes(this) }
-    fun generateNonce(): ByteArray = ByteArray(12).apply { SecureRandom().nextBytes(this) }
+    fun generateSalt(): ByteArray = ByteArray(SALT_LENGTH).apply { SecureRandom().nextBytes(this) }
+    fun generateNonce(): ByteArray = ByteArray(NONCE_LENGTH).apply { SecureRandom().nextBytes(this) }
 
-    fun deriveKey(passphrase: String, salt: ByteArray, iterations: Int): ByteArray {
-        val spec = PBEKeySpec(passphrase.toCharArray(), salt, iterations, KEY_LENGTH)
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+    fun deriveKey(passphrase: String, salt: ByteArray): ByteArray {
+        val spec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, KEY_LENGTH)
+        val factory = SecretKeyFactory.getInstance(KDF_ALGORITHM)
         return factory.generateSecret(spec).encoded
     }
 
-    fun encryptStream(
-        inStream: InputStream,
-        outStream: OutputStream,
-        passphrase: String,
-        salt: ByteArray,
-        nonce: ByteArray,
-        iterations: Int
-    ) {
-        val keyBytes = deriveKey(passphrase, salt, iterations)
-        val cipher = Cipher.getInstance(ALGORITHM).apply {
-            init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(GCM_TAG_LENGTH, nonce))
-        }
-
-        CipherOutputStream(outStream, cipher).use { cipherOut ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (inStream.read(buffer).also { bytesRead = it } != -1) {
-                cipherOut.write(buffer, 0, bytesRead)
-            }
-        }
+    fun encrypt(plaintext: ByteArray, key: ByteArray, nonce: ByteArray): ByteArray {
+        val secretKey = SecretKeySpec(key, ALGORITHM)
+        val cipher = Cipher.getInstance(CIPHER_MODE)
+        val spec = GCMParameterSpec(TAG_LENGTH, nonce)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
+        return cipher.doFinal(plaintext)
     }
 
-    fun decryptStream(
-        inStream: InputStream,
-        outStream: OutputStream,
-        passphrase: String,
-        salt: ByteArray,
-        nonce: ByteArray,
-        iterations: Int
-    ) {
-        val keyBytes = deriveKey(passphrase, salt, iterations)
-        val cipher = Cipher.getInstance(ALGORITHM).apply {
-            init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(GCM_TAG_LENGTH, nonce))
-        }
-
-        CipherInputStream(inStream, cipher).use { cipherIn ->
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            while (cipherIn.read(buffer).also { bytesRead = it } != -1) {
-                outStream.write(buffer, 0, bytesRead)
-            }
-        }
+    fun decrypt(ciphertext: ByteArray, key: ByteArray, nonce: ByteArray): ByteArray {
+        val secretKey = SecretKeySpec(key, ALGORITHM)
+        val cipher = Cipher.getInstance(CIPHER_MODE)
+        val spec = GCMParameterSpec(TAG_LENGTH, nonce)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
+        return cipher.doFinal(ciphertext)
     }
 }

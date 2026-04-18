@@ -1,37 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
 <navigation xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/nav_graph"
-    app:startDestination="@id/nav_home">
+    app:startDestination="@id/navigation_home">
 
     <fragment
-        android:id="@+id/nav_home"
+        android:id="@+id/navigation_home"
         android:name="com.stegovault.HomeFragment"
-        android:label="Home" />
+        android:label="@string/title_home"
+        tools:layout="@layout/fragment_home">
+        <action
+            android:id="@+id/action_home_to_encrypt"
+            app:destination="@id/navigation_encrypt" />
+        <action
+            android:id="@+id/action_home_to_decrypt"
+            app:destination="@id/navigation_decrypt" />
+        <action
+            android:id="@+id/action_home_to_scanner"
+            app:destination="@id/navigation_scanner" />
+    </fragment>
 
     <fragment
-        android:id="@+id/nav_vault"
-        android:name="com.stegovault.VaultFragment"
-        android:label="Vault" />
-
-    <fragment
-        android:id="@+id/nav_tools"
+        android:id="@+id/navigation_tools"
         android:name="com.stegovault.ToolsFragment"
-        android:label="Tools" />
+        android:label="Tools"
+        tools:layout="@layout/fragment_tools" />
 
     <fragment
-        android:id="@+id/nav_qr"
-        android:name="com.stegovault.QrScannerFragment"
-        android:label="QR Scanner" />
+        android:id="@+id/navigation_encrypt"
+        android:name="com.stegovault.EncryptFragment"
+        android:label="Encrypt"
+        tools:layout="@layout/fragment_encrypt" />
 
     <fragment
-        android:id="@+id/nav_settings"
+        android:id="@+id/navigation_decrypt"
+        android:name="com.stegovault.DecryptFragment"
+        android:label="Decrypt"
+        tools:layout="@layout/fragment_decrypt" />
+
+    <fragment
+        android:id="@+id/navigation_scanner"
+        android:name="com.stegovault.ScannerFragment"
+        android:label="@string/title_scanner"
+        tools:layout="@layout/fragment_scanner" />
+
+    <fragment
+        android:id="@+id/navigation_settings"
         android:name="com.stegovault.SettingsFragment"
-        android:label="Settings" />
+        android:label="@string/title_settings"
+        tools:layout="@layout/fragment_settings">
+        <action
+            android:id="@+id/action_settings_to_about"
+            app:destination="@id/navigation_about" />
+    </fragment>
 
     <fragment
-        android:id="@+id/nav_about"
+        android:id="@+id/navigation_about"
         android:name="com.stegovault.AboutFragment"
-        android:label="About" />
-
+        android:label="About"
+        tools:layout="@layout/fragment_about" />
 </navigation>

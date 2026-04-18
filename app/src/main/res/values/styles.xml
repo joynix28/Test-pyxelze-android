@@ -1,15 +1,6 @@
 <resources>
     <style name="Theme.StegoVault" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">#6750A4</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <!-- Secondary brand color. -->
-        <item name="colorSecondary">#625B71</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <!-- Background colors -->
-        <item name="android:colorBackground">#FFFBFE</item>
-        <item name="colorOnBackground">#1C1B1F</item>
-        <item name="colorSurface">#FFFBFE</item>
-        <item name="colorOnSurface">#1C1B1F</item>
+        <item name="colorPrimary">#6200EE</item>
+        <item name="colorSecondary">#03DAC5</item>
     </style>
 </resources>
